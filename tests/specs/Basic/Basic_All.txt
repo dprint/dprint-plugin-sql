@@ -1,0 +1,22 @@
+== should format basic ==
+SELECT *   FROM   dbo.Test    WHERE   test =   'asdf'
+GO
+
+
+
+update dbo.Test Set test=1
+GO
+
+[expect]
+SELECT
+    *
+FROM
+    dbo.Test
+WHERE
+    test = 'asdf'
+GO
+update
+    dbo.Test
+Set
+    test = 1
+GO
