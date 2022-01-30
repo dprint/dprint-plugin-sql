@@ -28,7 +28,8 @@ impl PluginHandler<Configuration> for SqlPluginHandler {
       file_extensions: vec!["sql".to_string()],
       file_names: vec![],
       help_url: "https://dprint.dev/plugins/sql".to_string(),
-      config_schema_url: format!("https://plugins.dprint.dev/schemas/sql-{}.json", version),
+      config_schema_url: format!("https://plugins.dprint.dev/dprint/dprint-plugin-sql/{}/schema.json", version),
+      update_url: Some("https://plugins.dprint.dev/dprint/dprint-plugin-sql/latest.json".to_string()),
     }
   }
 
