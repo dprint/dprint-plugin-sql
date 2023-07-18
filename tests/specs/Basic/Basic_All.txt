@@ -9,14 +9,14 @@ GO
 
 [expect]
 SELECT
-    *
+  *
 FROM
-    dbo.Test
+  dbo.Test
 WHERE
-    test = 'asdf'
+  test = 'asdf'
 GO
 update
-    dbo.Test
+  dbo.Test
 Set
-    test = 1
+  test = 1
 GO
