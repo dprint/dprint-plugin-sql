@@ -1,4 +1,5 @@
 use super::configuration::Configuration;
+use super::configuration::UppercaseKind;
 
 use anyhow::Result;
 use dprint_core::configuration::resolve_new_line_kind;
@@ -12,14 +13,25 @@ pub fn format_text(_file_path: &Path, text: &str, config: &Configuration) -> Res
   let text = sqlformat::format(
     text,
     &QueryParams::None,
-    FormatOptions {
+    &FormatOptions {
       indent: if config.use_tabs {
         Indent::Tabs
       } else {
         Indent::Spaces(config.indent_width)
       },
-      uppercase: config.uppercase,
+      uppercase: match config.uppercase {
+        UppercaseKind::Preserve => None,
+        UppercaseKind::Upper => Some(true),
+        UppercaseKind::Lower => Some(false),
+      },
       lines_between_queries: config.lines_between_queries,
+      joins_as_top_level: config.joins_as_top_level,
+      dialect: match config.dialect {
+        super::configuration::Dialect::Generic => sqlformat::Dialect::Generic,
+        super::configuration::Dialect::PostgreSql => sqlformat::Dialect::PostgreSql,
+        super::configuration::Dialect::SqlServer => sqlformat::Dialect::SQLServer,
+      },
+      ..Default::default()
     },
   );
 

@@ -12,7 +12,7 @@ use super::*;
 /// use dprint_plugin_sql::configuration::*;
 ///
 /// let config = ConfigurationBuilder::new()
-///     .uppercase(true)
+///     .casing(UppercaseKind::Upper)
 ///     .build();
 /// ```
 pub struct ConfigurationBuilder {
@@ -34,7 +34,7 @@ impl ConfigurationBuilder {
     if let Some(global_config) = &self.global_config {
       resolve_config(self.config.clone(), global_config).config
     } else {
-      let global_config = resolve_global_config(Default::default(), &Default::default()).config;
+      let global_config = resolve_global_config(&mut Default::default()).config;
       resolve_config(self.config.clone(), &global_config).config
     }
   }
@@ -54,7 +54,7 @@ impl ConfigurationBuilder {
 
   /// The number of columns for an indent.
   ///
-  /// Default: `4`
+  /// Default: `2`
   pub fn indent_width(&mut self, value: u8) -> &mut Self {
     self.insert("indentWidth", (value as i32).into())
   }
@@ -65,16 +65,28 @@ impl ConfigurationBuilder {
     self.insert("newLineKind", value.to_string().into())
   }
 
-  /// Use ALL CAPS for reserved words.
-  /// Default: `false`
-  pub fn uppercase(&mut self, value: bool) -> &mut Self {
-    self.insert("uppercase", value.into())
+  /// Controls casing of reserved words.
+  /// Default: `UppercaseKind::Preserve`
+  pub fn casing(&mut self, value: UppercaseKind) -> &mut Self {
+    self.insert("casing", value.to_string().into())
   }
 
   /// Number of line breaks between queries.
   /// Default: `1`
   pub fn lines_between_queries(&mut self, value: u8) -> &mut Self {
     self.insert("linesBetweenQueries", (value as i32).into())
+  }
+
+  /// Consider JOIN statements as top-level keywords.
+  /// Default: `false`
+  pub fn joins_as_top_level(&mut self, value: bool) -> &mut Self {
+    self.insert("joinsAsTopLevel", value.into())
+  }
+
+  /// The SQL dialect to use.
+  /// Default: `Dialect::Generic`
+  pub fn dialect(&mut self, value: Dialect) -> &mut Self {
+    self.insert("dialect", value.to_string().into())
   }
 
   #[cfg(test)]
@@ -101,14 +113,16 @@ mod tests {
       .new_line_kind(NewLineKind::CarriageReturnLineFeed)
       .use_tabs(true)
       .indent_width(4)
-      .uppercase(true)
-      .lines_between_queries(2);
+      .casing(UppercaseKind::Upper)
+      .lines_between_queries(2)
+      .joins_as_top_level(true)
+      .dialect(Dialect::PostgreSql);
 
     let inner_config = config.get_inner_config();
-    assert_eq!(inner_config.len(), 5);
+    assert_eq!(inner_config.len(), 7);
     let diagnostics = resolve_config(
       inner_config,
-      &resolve_global_config(Default::default(), &Default::default()).config,
+      &resolve_global_config(&mut Default::default()).config,
     )
     .diagnostics;
     assert_eq!(diagnostics.len(), 0);
@@ -119,7 +133,7 @@ mod tests {
     let mut global_config = ConfigKeyMap::new();
     global_config.insert(String::from("newLineKind"), "crlf".into());
     global_config.insert(String::from("useTabs"), true.into());
-    let global_config = resolve_global_config(global_config, &Default::default()).config;
+    let global_config = resolve_global_config(&mut global_config).config;
     let mut config_builder = ConfigurationBuilder::new();
     let config = config_builder.global_config(global_config).build();
     assert_eq!(config.new_line_kind == NewLineKind::CarriageReturnLineFeed, true);
@@ -128,7 +142,7 @@ mod tests {
 
   #[test]
   fn use_defaults_when_global_not_set() {
-    let global_config = resolve_global_config(Default::default(), &Default::default()).config;
+    let global_config = resolve_global_config(&mut Default::default()).config;
     let mut config_builder = ConfigurationBuilder::new();
     let config = config_builder.global_config(global_config).build();
     assert_eq!(config.indent_width, 2);

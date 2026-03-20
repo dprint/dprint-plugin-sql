@@ -1,4 +1,6 @@
 use super::Configuration;
+use super::Dialect;
+use super::UppercaseKind;
 use dprint_core::configuration::*;
 
 /// Resolves configuration from a collection of key value strings.
@@ -10,8 +12,8 @@ use dprint_core::configuration::*;
 /// use dprint_core::configuration::resolve_global_config;
 /// use dprint_plugin_sql::configuration::resolve_config;
 ///
-/// let config_map = ConfigKeyMap::new(); // get a collection of key value pairs from somewhere
-/// let global_config_result = resolve_global_config(config_map, &Default::default());
+/// let mut config_map = ConfigKeyMap::new(); // get a collection of key value pairs from somewhere
+/// let global_config_result = resolve_global_config(&mut config_map);
 ///
 /// // check global_config_result.diagnostics here...
 ///
@@ -29,6 +31,15 @@ pub fn resolve_config(
 ) -> ResolveConfigurationResult<Configuration> {
   let mut diagnostics = Vec::new();
   let mut config = config;
+
+  // handle legacy "uppercase" boolean config
+  let uppercase_default = if let Some(ConfigKeyValue::Bool(value)) = config.get("uppercase") {
+    let value = *value;
+    config.shift_remove("uppercase");
+    if value { UppercaseKind::Upper } else { UppercaseKind::Preserve }
+  } else {
+    UppercaseKind::Preserve
+  };
 
   let resolved_config = Configuration {
     use_tabs: get_value(
@@ -55,8 +66,10 @@ pub fn resolve_config(
         .unwrap_or(RECOMMENDED_GLOBAL_CONFIGURATION.new_line_kind),
       &mut diagnostics,
     ),
-    uppercase: get_value(&mut config, "uppercase", false, &mut diagnostics),
+    uppercase: get_value(&mut config, "casing", uppercase_default, &mut diagnostics),
     lines_between_queries: get_value(&mut config, "linesBetweenQueries", 1, &mut diagnostics),
+    joins_as_top_level: get_value(&mut config, "joinsAsTopLevel", false, &mut diagnostics),
+    dialect: get_value(&mut config, "dialect", Dialect::Generic, &mut diagnostics),
   };
 
   diagnostics.extend(get_unknown_property_diagnostics(config));
