@@ -1,0 +1,10 @@
+~~ linesBetweenQueries: 2 ~~
+== should use 2 lines between queries ==
+SELECT 1; SELECT 2
+
+[expect]
+SELECT
+  1;
+
+SELECT
+  2

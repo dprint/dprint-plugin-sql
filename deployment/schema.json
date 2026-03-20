@@ -47,14 +47,49 @@
       "$ref": "#/definitions/newLineKind"
     },
     "uppercase": {
-      "description": "Use ALL CAPS for reserved words.",
+      "description": "Deprecated. Use 'casing' instead. Use ALL CAPS for reserved words.",
       "default": false,
       "type": "boolean"
     },
+    "casing": {
+      "description": "Controls the casing of reserved words.",
+      "type": "string",
+      "default": "preserve",
+      "oneOf": [{
+        "const": "preserve",
+        "description": "Preserves the original casing of reserved words."
+      }, {
+        "const": "upper",
+        "description": "Converts reserved words to UPPERCASE."
+      }, {
+        "const": "lower",
+        "description": "Converts reserved words to lowercase."
+      }]
+    },
     "linesBetweenQueries": {
-      "description": "Number of line breaks between quries.",
+      "description": "Number of line breaks between queries.",
       "default": 1,
       "type": "number"
+    },
+    "joinsAsTopLevel": {
+      "description": "Consider JOIN statements as top-level keywords instead of reserved keywords.",
+      "default": false,
+      "type": "boolean"
+    },
+    "dialect": {
+      "description": "The SQL dialect to use for parsing.",
+      "type": "string",
+      "default": "generic",
+      "oneOf": [{
+        "const": "generic",
+        "description": "Generic SQL syntax."
+      }, {
+        "const": "postgresql",
+        "description": "PostgreSQL syntax with array syntax and operators."
+      }, {
+        "const": "sqlserver",
+        "description": "SQL Server syntax with bracketed identifiers and @variables."
+      }]
     }
   }
 }

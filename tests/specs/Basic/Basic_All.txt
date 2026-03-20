@@ -20,3 +20,65 @@ update
 Set
   test = 1
 GO
+
+== should format subquery ==
+SELECT * FROM (SELECT id, name FROM users WHERE active = 1) AS t WHERE t.id > 10
+
+[expect]
+SELECT
+  *
+FROM
+  (
+    SELECT
+      id,
+      name
+    FROM
+      users
+    WHERE
+      active = 1
+  ) AS t
+WHERE
+  t.id > 10
+
+== should format insert ==
+INSERT INTO users (id, name, email) VALUES (1, 'test', 'test@example.com')
+
+[expect]
+INSERT INTO
+  users (id, name, email)
+VALUES
+  (1, 'test', 'test@example.com')
+
+== should format join ==
+SELECT u.name, o.total FROM users u INNER JOIN orders o ON u.id = o.user_id WHERE o.total > 100
+
+[expect]
+SELECT
+  u.name,
+  o.total
+FROM
+  users u
+  INNER JOIN orders o ON u.id = o.user_id
+WHERE
+  o.total > 100
+
+== should format create table ==
+CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(255) NOT NULL, email VARCHAR(255) UNIQUE)
+
+[expect]
+CREATE TABLE users (
+  id INT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) UNIQUE
+)
+
+== should format multiple queries ==
+SELECT 1; SELECT 2; SELECT 3
+
+[expect]
+SELECT
+  1;
+SELECT
+  2;
+SELECT
+  3

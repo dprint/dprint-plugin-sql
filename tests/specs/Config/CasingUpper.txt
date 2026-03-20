@@ -1,0 +1,11 @@
+~~ casing: upper ~~
+== should uppercase with casing upper ==
+select * from users where id = 1
+
+[expect]
+SELECT
+  *
+FROM
+  users
+WHERE
+  id = 1
