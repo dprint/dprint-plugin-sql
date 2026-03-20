@@ -1,0 +1,11 @@
+~~ uppercase: true ~~
+== should support legacy uppercase boolean ==
+select * from users where id = 1
+
+[expect]
+SELECT
+  *
+FROM
+  users
+WHERE
+  id = 1
