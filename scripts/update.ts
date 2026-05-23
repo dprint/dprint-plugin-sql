@@ -16,11 +16,15 @@ if (semver.compare(currentVersion, latestVersion) >= 0) {
 }
 
 $.log("Found new version.");
-$.logStep("Updating Cargo.toml...");
 const isPatchBump = currentVersion.major === latestVersion.major
   && currentVersion.minor === latestVersion.minor;
 const currentVersionStr = `${currentVersion.major}.${currentVersion.minor}.${currentVersion.patch}`;
 const latestVersionStr = `${latestVersion.major}.${latestVersion.minor}.${latestVersion.patch}`;
+
+$.logStep("Updating rust-toolchain.toml...");
+await updateRustToolchain(latestVersionStr);
+
+$.logStep("Updating Cargo.toml...");
 cargoToml.replaceAll(`sqlformat = "${currentVersionStr}"`, `sqlformat = "${latestVersionStr}"`);
 
 // run the tests
@@ -68,4 +72,39 @@ async function getLatestSqlformatVersion() {
   const version = data.crate.max_stable_version ?? data.crate.max_version;
   $.logLight("Latest sqlformat version:", version);
   return semver.parse(version);
+}
+
+async function updateRustToolchain(sqlformatVersion: string) {
+  const response = await fetch(`https://crates.io/api/v1/crates/sqlformat/${sqlformatVersion}`, {
+    headers: {
+      "User-Agent": "dprint-plugin-sql update script",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch sqlformat ${sqlformatVersion} info: ${response.statusText}`);
+  }
+  const data = await response.json();
+  const requiredRustVersion = data.version?.rust_version;
+  if (requiredRustVersion == null) {
+    $.log(`sqlformat ${sqlformatVersion} does not declare a rust_version; leaving rust-toolchain.toml alone.`);
+    return;
+  }
+
+  const toolchainPath = rootDirPath.join("rust-toolchain.toml");
+  const localContent = toolchainPath.readTextSync();
+  const localMatch = localContent.match(/channel\s*=\s*"([^"]+)"/);
+  if (localMatch == null) {
+    throw new Error("Could not find channel in local rust-toolchain.toml.");
+  }
+  // crates.io rust_version may be "1.84" (no patch); pad to MAJOR.MINOR.PATCH
+  // so @std/semver can parse it.
+  const normalize = (v: string) => /^\d+\.\d+$/.test(v) ? `${v}.0` : v;
+  const local = semver.parse(normalize(localMatch[1]));
+  const required = semver.parse(normalize(requiredRustVersion));
+  if (semver.greaterThan(required, local)) {
+    $.log(`Updating Rust toolchain: ${localMatch[1]} -> ${requiredRustVersion}`);
+    toolchainPath.writeTextSync(localContent.replace(localMatch[0], `channel = "${requiredRustVersion}"`));
+  } else {
+    $.log(`Rust toolchain at ${localMatch[1]} already satisfies sqlformat ${sqlformatVersion} (needs >= ${requiredRustVersion}).`);
+  }
 }
