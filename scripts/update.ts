@@ -63,27 +63,18 @@ function getSqlformatVersion(text: string) {
 }
 
 async function getLatestSqlformatVersion() {
-  const response = await fetch("https://crates.io/api/v1/crates/sqlformat", {
-    headers: {
-      "User-Agent": "dprint-plugin-sql update script",
-    },
-  });
-  const data = await response.json();
+  const data = await $.request("https://crates.io/api/v1/crates/sqlformat")
+    .header("User-Agent", "dprint-plugin-sql update script")
+    .json();
   const version = data.crate.max_stable_version ?? data.crate.max_version;
   $.logLight("Latest sqlformat version:", version);
   return semver.parse(version);
 }
 
 async function updateRustToolchain(sqlformatVersion: string) {
-  const response = await fetch(`https://crates.io/api/v1/crates/sqlformat/${sqlformatVersion}`, {
-    headers: {
-      "User-Agent": "dprint-plugin-sql update script",
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch sqlformat ${sqlformatVersion} info: ${response.statusText}`);
-  }
-  const data = await response.json();
+  const data = await $.request(`https://crates.io/api/v1/crates/sqlformat/${sqlformatVersion}`)
+    .header("User-Agent", "dprint-plugin-sql update script")
+    .json();
   const requiredRustVersion = data.version?.rust_version;
   if (requiredRustVersion == null) {
     $.log(`sqlformat ${sqlformatVersion} does not declare a rust_version; leaving rust-toolchain.toml alone.`);
