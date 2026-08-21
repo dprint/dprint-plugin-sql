@@ -65,7 +65,7 @@ impl SyncPluginHandler<Configuration> for SqlPluginHandler {
     }
 
     let text = String::from_utf8_lossy(&request.file_bytes);
-    let maybe_text = super::format_text(request.file_path, &text, request.config).map_err(FormatError::new)?;
+    let maybe_text = super::format_text(request.file_path, &text, request.config);
     Ok(maybe_text.map(|t| t.into_bytes()))
   }
 }

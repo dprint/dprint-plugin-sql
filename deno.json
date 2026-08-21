@@ -1,6 +1,5 @@
 {
   "imports": {
-    "automation": "https://raw.githubusercontent.com/dprint/automation/0.10.0/mod.ts",
-    "automation/": "https://raw.githubusercontent.com/dprint/automation/0.10.0/"
+    "automation": "jsr:@dprint/automation@0.12.2"
   }
 }

@@ -1,14 +1,13 @@
 use super::configuration::Configuration;
 use super::configuration::UppercaseKind;
 
-use anyhow::Result;
 use dprint_core::configuration::resolve_new_line_kind;
 use sqlformat::FormatOptions;
 use sqlformat::Indent;
 use sqlformat::QueryParams;
 use std::path::Path;
 
-pub fn format_text(_file_path: &Path, text: &str, config: &Configuration) -> Result<Option<String>> {
+pub fn format_text(_file_path: &Path, text: &str, config: &Configuration) -> Option<String> {
   let input_text = text;
   let text = sqlformat::format(
     text,
@@ -53,8 +52,8 @@ pub fn format_text(_file_path: &Path, text: &str, config: &Configuration) -> Res
   };
 
   if text == input_text {
-    Ok(None)
+    None
   } else {
-    Ok(Some(text))
+    Some(text)
   }
 }
