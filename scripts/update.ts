@@ -96,6 +96,10 @@ async function updateRustToolchain(sqlformatVersion: string) {
     $.log(`Updating Rust toolchain: ${localMatch[1]} -> ${requiredRustVersion}`);
     toolchainPath.writeTextSync(localContent.replace(localMatch[0], `channel = "${requiredRustVersion}"`));
   } else {
-    $.log(`Rust toolchain at ${localMatch[1]} already satisfies sqlformat ${sqlformatVersion} (needs >= ${requiredRustVersion}).`);
+    $.log(
+      `Rust toolchain at ${
+        localMatch[1]
+      } already satisfies sqlformat ${sqlformatVersion} (needs >= ${requiredRustVersion}).`,
+    );
   }
 }
