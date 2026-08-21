@@ -29,7 +29,7 @@ fn test_specs() {
         let config_result = resolve_config(spec_config, &global_config);
         ensure_no_diagnostics(&config_result.diagnostics);
 
-        format_text(file_path, &file_text, &config_result.config)
+        Ok(format_text(file_path, &file_text, &config_result.config))
       })
     },
     Arc::new(move |_file_path, _file_text, _spec_config| panic!("Plugin does not support dprint-core tracing.")),
@@ -41,5 +41,5 @@ fn should_handle_windows_newlines() {
   let config = ConfigurationBuilder::new().build();
   let file_text = format_text(&PathBuf::from("file.sql"), "SELECT * FROM  dbo.Test\r\n", &config).unwrap();
 
-  assert_eq!(file_text.unwrap(), "SELECT\n  *\nFROM\n  dbo.Test\n");
+  assert_eq!(file_text, "SELECT\n  *\nFROM\n  dbo.Test\n");
 }
