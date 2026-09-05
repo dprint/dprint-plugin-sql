@@ -1,6 +1,6 @@
 # dprint-plugin-sql
 
-[![CI](https://github.com/dprint/dprint-plugin-sql/workflows/CI/badge.svg)](https://github.com/dprint/dprint-plugin-sql/actions?query=workflow%3ACI)
+[![npm version](https://img.shields.io/npm/v/@dprint/sql.svg)](https://www.npmjs.com/package/@dprint/sql) [![CI](https://github.com/dprint/dprint-plugin-sql/workflows/CI/badge.svg)](https://github.com/dprint/dprint-plugin-sql/actions?query=workflow%3ACI)
 
 Wrapper around [sqlformat-rs](https://github.com/shssoichiro/sqlformat-rs) for use as a formatting plugin for [dprint](https://github.com/dprint/dprint).
 
