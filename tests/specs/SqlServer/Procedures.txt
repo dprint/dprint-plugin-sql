@@ -46,11 +46,11 @@ SELECT @a + @b;
 GO
 
 == should format a procedure without a block ==
-CREATE PROCEDURE dbo.p
+CREATE   PROCEDURE   dbo.p
 AS
-SET NOCOUNT ON
-SELECT 1
-SELECT 2
+SET   NOCOUNT   ON
+SELECT   1
+SELECT   2
 GO
 
 [expect]
@@ -144,10 +144,10 @@ END
 GO
 
 == should format exec ==
-EXEC dbo.GetUser @Id = 1;
+EXEC   dbo.GetUser   @Id   =   1;
 EXEC dbo.GetOrders 1, '2020-01-01';
-EXECUTE @result = dbo.p @a = 1, @b = @x OUTPUT;
-EXEC (@sql);
+EXECUTE   @result   =   dbo.p   @a   =   1 ,   @b   =   @x   OUTPUT;
+EXEC   (@sql);
 EXEC sp_executesql @sql, N'@id INT', @id = 1;
 
 [expect]

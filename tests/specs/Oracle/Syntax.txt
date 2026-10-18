@@ -147,3 +147,10 @@ EXECUTE dbms_stats.gather_schema_stats( -
         cascade => TRUE);
 SELECT 1
 FROM dual;
+
+== should read quoted strings with bracket delimiters ==
+SELECT q'<a>b>', q'{x}y}', q'(z)' FROM dual;
+
+[expect]
+SELECT q'<a>b>', q'{x}y}', q'(z)'
+FROM dual;

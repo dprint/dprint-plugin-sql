@@ -146,7 +146,7 @@ END //
 DELIMITER ;
 
 == should format a procedure with a single statement body ==
-CREATE PROCEDURE p() SELECT 1;
+CREATE   PROCEDURE   p()   SELECT   1;
 
 [expect]
 CREATE PROCEDURE p() SELECT 1;
@@ -181,7 +181,7 @@ END //
 DELIMITER ;
 
 == should format a trigger with a single statement ==
-CREATE TRIGGER t_ai AFTER INSERT ON t FOR EACH ROW INSERT INTO log (id) VALUES (NEW.id);
+CREATE   TRIGGER   t_ai   AFTER   INSERT   ON   t   FOR   EACH   ROW   INSERT   INTO   log   (id)   VALUES   (NEW.id);
 
 [expect]
 CREATE TRIGGER t_ai AFTER INSERT ON t FOR EACH ROW INSERT INTO log (id) VALUES (NEW.id);
@@ -215,9 +215,35 @@ END //
 DELIMITER ;
 
 == should format call ==
-CALL get_user(1, @name);
-SELECT @name;
+CALL get_user(1, @name); SELECT @name;
 
 [expect]
 CALL get_user(1, @name);
 SELECT @name;
+
+== should leave an if without an end as statements ==
+CREATE PROCEDURE p() BEGIN IF a THEN SET b = 1; END;
+
+[expect]
+CREATE PROCEDURE p()
+BEGIN
+  IF a THEN SET b = 1;
+END;
+
+== should leave a repeat without an until as statements ==
+CREATE PROCEDURE p() BEGIN REPEAT SET a = a + 1; END;
+
+[expect]
+CREATE PROCEDURE p()
+BEGIN
+  REPEAT SET a = a + 1;
+END;
+
+== should leave a while without an end as statements ==
+CREATE PROCEDURE p() BEGIN WHILE a < 1 DO SET a = a + 1; END;
+
+[expect]
+CREATE PROCEDURE p()
+BEGIN
+  WHILE a < 1 DO SET a = a + 1;
+END;

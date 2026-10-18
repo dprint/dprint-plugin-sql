@@ -1,0 +1,17 @@
+~~ dialect: mysql ~~
+== should format within a delimiter block ==
+select   1;
+DELIMITER //
+CREATE PROCEDURE p() BEGIN select   [|2|]; END//
+DELIMITER ;
+select   3;
+
+[expect]
+select   1;
+DELIMITER //
+CREATE PROCEDURE p()
+BEGIN
+  select 2;
+END//
+DELIMITER ;
+select   3;

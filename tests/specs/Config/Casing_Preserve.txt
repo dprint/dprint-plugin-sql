@@ -1,4 +1,5 @@
-== should preserve casing by default ==
+~~ casing: preserve ~~
+== should preserve casing ==
 SELECT a FROM t where b = 1 Order By a;
 
 [expect]

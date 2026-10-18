@@ -8,3 +8,17 @@ FROM users u
 INNER JOIN orders o ON u.id = o.user_id
 LEFT JOIN payments p ON o.id = p.order_id
 WHERE o.total > 100;
+
+== should write joins in a subquery at the indentation of its from ==
+SELECT * FROM (SELECT a FROM t JOIN u ON t.id = u.id LEFT JOIN v ON v.id = u.id WHERE t.a > 100000) x JOIN w ON w.id = x.id;
+
+[expect]
+SELECT *
+FROM (
+  SELECT a
+  FROM t
+  JOIN u ON t.id = u.id
+  LEFT JOIN v ON v.id = u.id
+  WHERE t.a > 100000
+) x
+JOIN w ON w.id = x.id;

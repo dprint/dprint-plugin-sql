@@ -58,14 +58,13 @@ INSERT OR IGNORE INTO t (a)
 VALUES (1);
 
 == should format a create table ==
-CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL COLLATE NOCASE, data BLOB) WITHOUT ROWID;
+CREATE   TABLE   t   (id   INTEGER   PRIMARY   KEY   AUTOINCREMENT ,   name   TEXT   NOT   NULL   COLLATE   NOCASE ,   data   BLOB)   WITHOUT   ROWID;
 
 [expect]
 CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL COLLATE NOCASE, data BLOB) WITHOUT ROWID;
 
 == should format pragmas ==
-PRAGMA foreign_keys = ON;
-PRAGMA table_info(t);
+PRAGMA foreign_keys = ON; PRAGMA table_info(t);
 
 [expect]
 PRAGMA foreign_keys = ON;

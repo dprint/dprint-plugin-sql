@@ -6,9 +6,7 @@ select percentile_disc(array[[null, 1, 0.5], [0.75, 0.25, null]]) within group (
 from t;
 
 == should not read an alias in a trigger as declarations ==
-CREATE TRIGGER t AFTER UPDATE ON p REFERENCING OLD TABLE AS old_table FOR EACH STATEMENT EXECUTE PROCEDURE f();
-CREATE TRIGGER u AFTER UPDATE ON p REFERENCING NEW TABLE AS new_table FOR EACH STATEMENT EXECUTE PROCEDURE f();
-SELECT 1;
+CREATE TRIGGER t AFTER UPDATE ON p REFERENCING OLD TABLE AS old_table FOR EACH STATEMENT EXECUTE PROCEDURE f(); CREATE TRIGGER u AFTER UPDATE ON p REFERENCING NEW TABLE AS new_table FOR EACH STATEMENT EXECUTE PROCEDURE f(); SELECT 1;
 
 [expect]
 CREATE TRIGGER t AFTER UPDATE ON p REFERENCING OLD TABLE AS old_table FOR EACH STATEMENT EXECUTE PROCEDURE f();
@@ -39,7 +37,7 @@ CREATE OPERATOR #%# (leftarg = int8, procedure = f);
 
 == should read a hash at the start of a line as a comment ==
 #=== a section ===
-SELECT 1;
+SELECT   1;
 
 [expect]
 #=== a section ===
@@ -47,15 +45,15 @@ SELECT 1;
 
 == should read a hash after a statement as a comment ==
 USE db; #inline
-SELECT 1;
+SELECT   1;
 
 [expect]
 USE db; #inline
 SELECT 1;
 
 == should not split a grant at its privileges ==
-GRANT SELECT, UPDATE ON t TO u
-ALTER TABLE t DROP COLUMN c
+GRANT   SELECT ,   UPDATE   ON   t   TO   u
+ALTER   TABLE   t   DROP   COLUMN   c
 
 [expect]
 GRANT SELECT, UPDATE ON t TO u
@@ -96,8 +94,8 @@ INSERT INTO t (a)
 VALUES (2) SELECT 3
 
 == should split a second query that starts a line ==
-SELECT 1
-SELECT 2
+SELECT   1
+SELECT   2
 
 [expect]
 SELECT 1
@@ -140,3 +138,14 @@ create trigger tr after insert on t for each row insert into log values (1);
 create view v as
 select event, name
 from t;
+
+== should not split at words that continue a statement on the next line ==
+CREATE TEMPORARY TABLE t (a int)
+ON COMMIT PRESERVE ROWS
+SELECT * FROM t
+USE INDEX (i)
+
+[expect]
+CREATE TEMPORARY TABLE t (a int) ON COMMIT PRESERVE ROWS
+SELECT *
+FROM t USE INDEX (i)

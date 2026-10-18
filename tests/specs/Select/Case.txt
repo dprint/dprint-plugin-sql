@@ -85,3 +85,16 @@ SELECT CASE WHEN a THEN 1 END FROM t;
 [expect]
 SELECT CASE WHEN a THEN 1 END
 FROM t;
+
+== should keep a comment before the end of a case ==
+SELECT CASE WHEN a THEN 1
+  -- before end
+END FROM t;
+
+[expect]
+SELECT
+  CASE
+    WHEN a THEN 1
+    -- before end
+  END
+FROM t;

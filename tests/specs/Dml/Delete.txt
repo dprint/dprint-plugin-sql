@@ -6,7 +6,7 @@ DELETE FROM t
 WHERE id = 1;
 
 == should format a delete without a where ==
-DELETE FROM t;
+DELETE   FROM   t;
 
 [expect]
 DELETE FROM t;

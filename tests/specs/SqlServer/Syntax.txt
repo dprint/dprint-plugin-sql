@@ -128,3 +128,10 @@ SELECT id, offset, filter, identity FROM t;
 [expect]
 SELECT id, offset, filter, identity
 FROM t;
+
+== should format a top percent ==
+SELECT TOP (10) PERCENT a FROM t;
+
+[expect]
+SELECT TOP (10) PERCENT a
+FROM t;

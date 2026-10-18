@@ -30,7 +30,7 @@ where a = 1 {% if x %} and b = 2 {% endif %};
 
 == should keep a config block before a query ==
 {{ config(materialized='table') }}
-select 1 as id
+select   1   as   id
 
 [expect]
 {{ config(materialized='table') }}
@@ -38,7 +38,7 @@ select 1 as id
 
 == should keep template comments ==
 {# a comment #}
-select 1;
+select   1;
 
 [expect]
 {# a comment #}

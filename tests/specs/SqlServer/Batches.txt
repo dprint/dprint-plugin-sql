@@ -1,8 +1,8 @@
 ~~ dialect: sqlserver ~~
 == should keep go on its own line ==
-SELECT 1
+SELECT   1
 GO
-SELECT 2
+SELECT   2
 GO
 
 [expect]
@@ -20,7 +20,7 @@ INSERT INTO t DEFAULT VALUES
 GO 10
 
 == should keep a comment after go ==
-SELECT 1
+SELECT   1
 GO -- end of batch
 
 [expect]
@@ -28,11 +28,11 @@ SELECT 1
 GO -- end of batch
 
 == should keep blank lines around go ==
-SELECT 1
+SELECT   1
 
 GO
 
-SELECT 2
+SELECT   2
 
 [expect]
 SELECT 1
@@ -141,3 +141,22 @@ INSERT INTO #t
 VALUES (1)
 UPDATE #t
 SET a = 2
+
+== should start a statement at a common table expression with columns ==
+SELECT 1
+WITH c (a) AS (SELECT 1) SELECT a FROM c
+
+[expect]
+SELECT 1
+WITH c (a) AS (SELECT 1)
+SELECT a
+FROM c
+
+== should keep the set of an alter in it ==
+ALTER DATABASE d
+SET RECOVERY SIMPLE
+SELECT 1
+
+[expect]
+ALTER DATABASE d SET RECOVERY SIMPLE
+SELECT 1

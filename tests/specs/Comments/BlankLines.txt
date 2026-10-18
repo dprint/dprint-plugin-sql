@@ -1,8 +1,8 @@
 == should keep a blank line between statements ==
-SELECT 1;
+SELECT   1;
 
-SELECT 2;
-SELECT 3;
+SELECT   2;
+SELECT   3;
 
 [expect]
 SELECT 1;
@@ -59,10 +59,10 @@ BEGIN
 END;
 
 == should keep a blank line before a comment ==
-SELECT 1;
+SELECT   1;
 
 -- about the next one
-SELECT 2;
+SELECT   2;
 
 [expect]
 SELECT 1;

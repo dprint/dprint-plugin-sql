@@ -68,11 +68,11 @@ FROM t
 WHERE id = :id AND name = :'name' AND col = :"column";
 
 == should format copy data ==
-COPY t (a, b) FROM stdin;
+COPY   t   (a ,   b)   FROM   stdin;
 1	foo
 2	bar
 \.
-SELECT 1;
+SELECT   1;
 
 [expect]
 COPY t (a, b) FROM stdin;
@@ -148,3 +148,9 @@ select
   'bar' as x,
   'a' 'b' as y
 from t;
+
+== should format an alter table if exists only ==
+ALTER   TABLE   IF   EXISTS   ONLY   t   ADD   COLUMN   a   int ,   ADD   COLUMN   b   int;
+
+[expect]
+ALTER TABLE IF EXISTS ONLY t ADD COLUMN a int, ADD COLUMN b int;

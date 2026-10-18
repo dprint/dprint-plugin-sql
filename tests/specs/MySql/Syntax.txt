@@ -40,8 +40,7 @@ SELECT "text" AS a;
 SELECT "text" AS a;
 
 == should format user variables ==
-SET @a := 1, @b = 2;
-SELECT @a + @b, @@session.sql_mode, @@global.max_connections;
+SET @a := 1, @b = 2; SELECT @a + @b, @@session.sql_mode, @@global.max_connections;
 
 [expect]
 SET @a := 1, @b = 2;
@@ -102,7 +101,7 @@ CREATE TABLE `t` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 == should format alter table ==
-ALTER TABLE t ADD COLUMN c INT AFTER b, DROP INDEX idx, MODIFY COLUMN d TEXT;
+ALTER   TABLE   t   ADD   COLUMN   c   INT   AFTER   b ,   DROP   INDEX   idx ,   MODIFY   COLUMN   d   TEXT;
 
 [expect]
 ALTER TABLE t ADD COLUMN c INT AFTER b, DROP INDEX idx, MODIFY COLUMN d TEXT;
@@ -145,3 +144,12 @@ SELECT *
 FROM t
 WHERE x = @v # note
   AND y = 1;
+
+== should format a lock in share mode ==
+SELECT * FROM t WHERE a = 1 LOCK IN SHARE MODE;
+
+[expect]
+SELECT *
+FROM t
+WHERE a = 1
+LOCK IN SHARE MODE;

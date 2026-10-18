@@ -173,3 +173,13 @@ WITH active_users AS (
 )
 SELECT *
 FROM active_users;
+
+== should break conditions around a between ==
+SELECT * FROM t WHERE a BETWEEN 1 AND 2 AND b = 1 OR c NOT BETWEEN x AND y;
+
+[expect]
+SELECT *
+FROM t
+WHERE a BETWEEN 1 AND 2
+  AND b = 1
+  OR c NOT BETWEEN x AND y;
