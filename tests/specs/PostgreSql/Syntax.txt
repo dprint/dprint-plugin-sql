@@ -137,3 +137,14 @@ SELECT a b, c　d FROM t;
 [expect]
 SELECT a b, c　d
 FROM t;
+
+== should keep the line break between strings that are joined ==
+select 'foo'
+'bar' as x, 'a' 'b' as y from t;
+
+[expect]
+select
+  'foo'
+  'bar' as x,
+  'a' 'b' as y
+from t;

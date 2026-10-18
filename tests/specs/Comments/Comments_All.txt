@@ -211,3 +211,23 @@ SELECT 1;
 -- two
 
 /* three */
+
+== should indent a clause beneath a comment on its own line after the keyword ==
+select a from t where
+/* c */
+x = 1 and y = 2
+group by a having
+-- why
+count(*) > 1;
+
+[expect]
+select a
+from t
+where
+  /* c */
+  x = 1
+    and y = 2
+group by a
+having
+  -- why
+  count(*) > 1;

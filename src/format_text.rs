@@ -175,23 +175,33 @@ pub(crate) fn verify(original: &[Token], formatted: &str, config: &Configuration
 }
 
 fn tokens_equivalent(a: &[Token], b: &[Token], config: &Configuration) -> bool {
-  let mut a_code = a.iter().filter(|t| !t.is_comment());
-  let mut b_code = b.iter().filter(|t| !t.is_comment());
+  // a template tag on a line of its own is like a comment to the formatter, but it may hold code
+  // (ex. `{% if x %}`), so it's compared in its place among the code
+  let is_comment = |t: &&Token| matches!(t.kind, TokenKind::LineComment | TokenKind::BlockComment);
+  let mut a_code = a.iter().filter(|t| !is_comment(t));
+  let mut b_code = b.iter().filter(|t| !is_comment(t));
+  let mut previous_is_string = false;
   loop {
     match (a_code.next(), b_code.next()) {
       (None, None) => break,
-      (Some(a), Some(b)) if token_equivalent(a, b, config) => {}
+      (Some(a), Some(b)) if token_equivalent(a, b, config) => {
+        // PostgreSQL only joins strings that are separated by a line break
+        if previous_is_string && a.kind == TokenKind::String && a.starts_line() != b.starts_line() {
+          return false;
+        }
+        previous_is_string = a.kind == TokenKind::String;
+      }
       _ => return false,
     }
   }
-  let a_comments = a.iter().filter(|t| t.is_comment()).map(comment_text);
-  let b_comments = b.iter().filter(|t| t.is_comment()).map(comment_text);
+  let a_comments = a.iter().filter(is_comment).map(comment_text);
+  let b_comments = b.iter().filter(is_comment).map(comment_text);
   a_comments.eq(b_comments)
 }
 
 fn comment_text<'a>(token: &'a Token) -> std::borrow::Cow<'a, str> {
   let text = match token.kind {
-    TokenKind::LineComment | TokenKind::TemplateLine => token.text.trim_end_matches([' ', '\t']),
+    TokenKind::LineComment | TokenKind::TemplateLine | TokenKind::Template => token.text.trim_end_matches([' ', '\t']),
     // a SQLite comment may run to the end of the file, which the formatter ends with a newline
     TokenKind::BlockComment if !token.text.ends_with("*/") => token.text.trim_end(),
     _ => token.text,
@@ -200,6 +210,11 @@ fn comment_text<'a>(token: &'a Token) -> std::borrow::Cow<'a, str> {
 }
 
 fn token_equivalent(a: &Token, b: &Token, config: &Configuration) -> bool {
+  // whether a template tag is on a line of its own only changes how it's formatted
+  let is_template = |t: &Token| matches!(t.kind, TokenKind::Template | TokenKind::TemplateLine);
+  if is_template(a) && is_template(b) {
+    return comment_text(a) == comment_text(b);
+  }
   if a.kind != b.kind {
     return false;
   }
@@ -207,7 +222,11 @@ fn token_equivalent(a: &Token, b: &Token, config: &Configuration) -> bool {
     return true;
   }
   match a.kind {
-    TokenKind::Word => config.uppercase != UppercaseKind::Preserve && a.text.eq_ignore_ascii_case(b.text),
+    TokenKind::Word => match config.uppercase {
+      UppercaseKind::Preserve => false,
+      UppercaseKind::Upper => b.text == a.text.to_ascii_uppercase(),
+      UppercaseKind::Lower => b.text == a.text.to_ascii_lowercase(),
+    },
     TokenKind::Directive | TokenKind::BatchSeparator => a.text.trim_end() == b.text.trim_end(),
     TokenKind::DollarString => dollar_string_bodies_equivalent(a.text, b.text, config),
     _ => false,
@@ -257,7 +276,11 @@ mod test {
     assert!(verify(&tokens, "SELECT a FROM", &config).is_err());
     assert!(verify(&tokens, "select a from t", &config).is_err());
     let upper = ConfigurationBuilder::new().casing(UppercaseKind::Upper).build();
-    assert!(verify(&tokens, "select a from t", &upper).is_ok());
+    let lower_tokens = lexer::lex("select a from t", Dialect::Generic).unwrap();
+    assert!(verify(&lower_tokens, "SELECT a FROM t", &upper).is_ok());
+    // a word's case only changes to the configured one
+    assert!(verify(&lower_tokens, "Select a from t", &upper).is_err());
+    assert!(verify(&tokens, "select a from t", &upper).is_err());
   }
 
   #[test]

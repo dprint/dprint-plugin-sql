@@ -1152,7 +1152,6 @@ fn gen_clause(clause: &Clause, context: &mut Context) -> PrintItems {
   if body.is_empty() {
     return items;
   }
-  let needs_space = !clause.keyword.is_empty() && !keyword_comment_ends_line;
   if clause
     .keyword
     .last()
@@ -1161,13 +1160,52 @@ fn gen_clause(clause: &Clause, context: &mut Context) -> PrintItems {
   {
     context.table_name_start = body.iter().find(|e| !e.is_comment()).map(|e| e.first_token().start);
   }
-  match clause.kind {
+  // a comment on a line of its own after the keyword starts the body indented beneath it
+  if !clause.keyword.is_empty()
+    && !keyword_comment_ends_line
+    && body[0].is_comment()
+    && body[0].first_token().newlines_before > 0
+    && !matches!(
+      clause.kind,
+      ClauseKind::List | ClauseKind::InlineList | ClauseKind::From
+    )
+  {
+    items.push_signal(Signal::NewLine);
+    items.extend(ir_helpers::with_indent(gen_clause_body(
+      clause.kind,
+      body,
+      false,
+      false,
+      context,
+    )));
+    return items;
+  }
+  let needs_space = !clause.keyword.is_empty() && !keyword_comment_ends_line;
+  items.extend(gen_clause_body(
+    clause.kind,
+    body,
+    needs_space,
+    keyword_comment_ends_line,
+    context,
+  ));
+  items
+}
+
+fn gen_clause_body(
+  kind: ClauseKind,
+  body: &[Element],
+  needs_space: bool,
+  keyword_comment_ends_line: bool,
+  context: &mut Context,
+) -> PrintItems {
+  let mut items = PrintItems::new();
+  match kind {
     ClauseKind::Head => items.extend(gen_fill(body, context)),
     ClauseKind::Fill | ClauseKind::Condition | ClauseKind::With | ClauseKind::MergeWhen => {
       if needs_space {
         items.push_space();
       }
-      items.extend(match clause.kind {
+      items.extend(match kind {
         ClauseKind::Fill => gen_fill(body, context),
         ClauseKind::Condition => gen_conditions_hanging(body, context),
         ClauseKind::With => gen_with(body, context),
@@ -1385,6 +1423,20 @@ fn split_list<'e, 'a>(elements: &'e [Element<'a>]) -> Vec<ListItem<'e, 'a>> {
 }
 
 fn gen_list(elements: &[Element], style: ListStyle, force: bool, context: &mut Context) -> PrintItems {
+  // a template tag may hold the commas around it (ex. `{% if x %}, b{% endif %}`), so a list with
+  // one on a line of its own or a statement tag against a comma is written as it flows rather than
+  // item by item
+  if has_template_around_commas(elements) {
+    let mut items = PrintItems::new();
+    let mut body = PrintItems::new();
+    body.push_signal(Signal::NewLine);
+    body.extend(gen_fill(elements, context));
+    items.extend(ir_helpers::with_indent(body));
+    if style == ListStyle::InBrackets {
+      items.push_signal(Signal::NewLine);
+    }
+    return items;
+  }
   let items = split_list(elements);
   if items.is_empty() {
     return PrintItems::new();
@@ -1463,6 +1515,17 @@ fn gen_list(elements: &[Element], style: ListStyle, force: bool, context: &mut C
     },
   )
   .items
+}
+
+fn has_template_around_commas(elements: &[Element]) -> bool {
+  elements.iter().enumerate().any(|(i, element)| {
+    element.is_kind(TokenKind::TemplateLine)
+      || (element
+        .as_token()
+        .is_some_and(|t| t.kind == TokenKind::Template && t.text.starts_with("{%"))
+        && (elements.get(i + 1).is_some_and(|e| e.is_kind(TokenKind::Comma))
+          || i.checked_sub(1).is_some_and(|i| elements[i].is_kind(TokenKind::Comma))))
+  })
 }
 
 fn gen_list_item(item: &ListItem, context: &mut Context) -> PrintItems {
@@ -1993,6 +2056,12 @@ fn gen_fill_ex(elements: &[Element], context: &mut Context, all_keywords: bool) 
         } else if first.space_before {
           items.push_space();
         }
+      } else if previous.last_token().kind == TokenKind::String
+        && element.first_token().kind == TokenKind::String
+        && element.first_token().newlines_before > 0
+      {
+        // PostgreSQL only joins strings that are separated by a line break
+        items.push_signal(Signal::NewLine);
       } else if needs_space(elements, i) || would_join(previous.last_token(), element.first_token(), context) {
         items.push_space();
       }

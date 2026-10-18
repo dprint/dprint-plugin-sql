@@ -70,9 +70,58 @@ from t
 
 [expect]
 select
-  a,
+  a
   {% if x
   and y %}
-  b
+  , b
 {% endif %}
+from t
+
+== should not move a comma across a template tag ==
+select
+  id
+  {% if include_email %}
+  , email
+  {% endif %}
+from users
+
+[expect]
+select
+  id
+  {% if include_email %}
+  , email
+{% endif %}
+from users
+
+== should keep a comma within template tags ==
+select
+  {% for c in cols %}
+  {{ c }}{% if not loop.last %},{% endif %}
+  {% endfor %}
+from t
+
+[expect]
+select
+  {% for c in cols %}
+  {{ c }}{% if not loop.last %}, {% endif %}
+{% endfor %}
+from t
+
+== should start a clause after a template tag ==
+select * from t
+-- c
+{% if x %} where b = 1 {% endif %}
+
+[expect]
+select *
+from t
+-- c
+{% if x %}
+where b = 1 {% endif %}
+
+== should format a list of template expressions as a list ==
+select {{ a }}, b, {{ c }} from t
+
+[expect]
+select {{ a }}, b, {{ c }}
 from t
