@@ -1,0 +1,461 @@
+// Tables of words that mean something to the formatter.
+//
+// Each table is sorted and uppercase, which `contains` relies on to look a word up without
+// allocating. The tests at the bottom check that they stay that way.
+
+use std::cmp::Ordering;
+
+/// For a word naming a kind of object that a `CREATE` or `ALTER` may be of, whether it's a routine
+/// (a procedure, function, trigger, package or event), whose body is code. `None` when it names no
+/// kind, or one that may come before the kind (ex. the `TYPE` of `CREATE TYPE BODY`).
+pub fn object_kind_is_routine(word: &str) -> Option<bool> {
+  if !contains(OBJECT_KINDS, word)
+    || ["AGGREGATE", "CONSTRAINT", "TYPE"]
+      .iter()
+      .any(|w| word.eq_ignore_ascii_case(w))
+  {
+    return None;
+  }
+  Some(
+    ["PROCEDURE", "PROC", "FUNCTION", "TRIGGER", "PACKAGE", "BODY", "EVENT"]
+      .iter()
+      .any(|kind| word.eq_ignore_ascii_case(kind)),
+  )
+}
+
+/// Whether `word` is in `sorted_words`, ignoring case.
+pub fn contains(sorted_words: &[&str], word: &str) -> bool {
+  sorted_words
+    .binary_search_by(|candidate| cmp_ignore_ascii_case(candidate, word))
+    .is_ok()
+}
+
+fn cmp_ignore_ascii_case(a: &str, b: &str) -> Ordering {
+  let a = a.bytes().map(|b| b.to_ascii_uppercase());
+  let b = b.bytes().map(|b| b.to_ascii_uppercase());
+  a.cmp(b)
+}
+
+/// Words that are keywords wherever they appear, since they're reserved in the dialects that use
+/// them (or never make sense as a name). These are the ones the `casing` option changes, and the
+/// ones after which a `-` is a sign rather than a minus.
+///
+/// Words that are as often names as keywords (ex. `name`, `key`, `first`, `language`) are left
+/// out. Where they're used as keywords is worked out from what's around them instead.
+pub const RESERVED: &[&str] = &[
+  "ADD",
+  "ALL",
+  "ALTER",
+  "AND",
+  "ANY",
+  "ARRAY",
+  "AS",
+  "ASC",
+  "AUTHORIZATION",
+  "AUTOINCREMENT",
+  "AUTO_INCREMENT",
+  "BEGIN",
+  "BETWEEN",
+  "BIGINT",
+  "BOOLEAN",
+  "BOTH",
+  "BY",
+  "CALL",
+  "CASCADE",
+  "CASE",
+  "CAST",
+  "CHECK",
+  "CLOSE",
+  "CLUSTERED",
+  "COLLATE",
+  "COLUMN",
+  "COMMIT",
+  "CONSTRAINT",
+  "CONTINUE",
+  "CREATE",
+  "CROSS",
+  "CUBE",
+  "CURRENT",
+  "CURRENT_DATE",
+  "CURRENT_TIME",
+  "CURRENT_TIMESTAMP",
+  "CURRENT_USER",
+  "CURSOR",
+  "DATABASE",
+  "DEALLOCATE",
+  "DECIMAL",
+  "DECLARE",
+  "DEFAULT",
+  "DEFERRABLE",
+  "DELETE",
+  "DENY",
+  "DESC",
+  "DESCRIBE",
+  "DETERMINISTIC",
+  "DISTINCT",
+  "DO",
+  "DROP",
+  "EACH",
+  "ELSE",
+  "ELSEIF",
+  "ELSIF",
+  "END",
+  "ESCAPE",
+  "EXCEPT",
+  "EXCEPTION",
+  "EXEC",
+  "EXECUTE",
+  "EXISTS",
+  "EXIT",
+  "EXPLAIN",
+  "FALSE",
+  "FETCH",
+  "FILTER",
+  "FOLLOWING",
+  "FOR",
+  "FOREACH",
+  "FOREIGN",
+  "FROM",
+  "FULL",
+  "FUNCTION",
+  "GOTO",
+  "GRANT",
+  "GROUP",
+  "HANDLER",
+  "HAVING",
+  "IDENTITY",
+  "IF",
+  "ILIKE",
+  "IN",
+  "INDEX",
+  "INNER",
+  "INOUT",
+  "INSERT",
+  "INT",
+  "INTEGER",
+  "INTERSECT",
+  "INTERVAL",
+  "INTO",
+  "IS",
+  "ISNULL",
+  "JOIN",
+  "LATERAL",
+  "LEADING",
+  "LEAVE",
+  "LEFT",
+  "LIKE",
+  "LIMIT",
+  "LOCALTIME",
+  "LOCALTIMESTAMP",
+  "LOOP",
+  "MATCHED",
+  "MERGE",
+  "MINUS",
+  "NATURAL",
+  "NCHAR",
+  "NONCLUSTERED",
+  "NOT",
+  "NOTNULL",
+  "NULL",
+  "NULLS",
+  "NUMERIC",
+  "NVARCHAR",
+  "OF",
+  "OFFSET",
+  "ON",
+  "OPEN",
+  "OR",
+  "ORDER",
+  "OUTER",
+  "OVER",
+  "PARTITION",
+  "PRECEDING",
+  "PRIMARY",
+  "PRINT",
+  "PROC",
+  "PROCEDURE",
+  "QUALIFY",
+  "RAISE",
+  "RAISERROR",
+  "RECURSIVE",
+  "REFERENCES",
+  "REGEXP",
+  "REPEAT",
+  "REPLACE",
+  "RESTRICT",
+  "RETURN",
+  "RETURNING",
+  "RETURNS",
+  "REVOKE",
+  "RIGHT",
+  "RLIKE",
+  "ROLLBACK",
+  "ROLLUP",
+  "SAVEPOINT",
+  "SCHEMA",
+  "SELECT",
+  "SET",
+  "SIMILAR",
+  "SMALLINT",
+  "SOME",
+  "TABLE",
+  "TEMPORARY",
+  "THEN",
+  "THROW",
+  "TINYINT",
+  "TO",
+  "TOP",
+  "TRAILING",
+  "TRAN",
+  "TRANSACTION",
+  "TRIGGER",
+  "TRUE",
+  "TRUNCATE",
+  "UNBOUNDED",
+  "UNION",
+  "UNIQUE",
+  "UNKNOWN",
+  "UNTIL",
+  "UPDATE",
+  "USING",
+  "VALUES",
+  "VARCHAR",
+  "VARCHAR2",
+  "VIEW",
+  "WHEN",
+  "WHERE",
+  "WHILE",
+  "WINDOW",
+  "WITH",
+  "WITHIN",
+  "XOR",
+];
+
+/// Keywords that stand for a value, so an operator after one is a binary operator.
+pub const VALUE_KEYWORDS: &[&str] = &[
+  "CURRENT_DATE",
+  "CURRENT_TIME",
+  "CURRENT_TIMESTAMP",
+  "CURRENT_USER",
+  "END",
+  "FALSE",
+  "LOCALTIME",
+  "LOCALTIMESTAMP",
+  "NULL",
+  "TRUE",
+  "UNKNOWN",
+];
+
+/// Keywords that are followed by a space before an opening parenthesis, as opposed to ones that
+/// are called like functions or name a type (ex. `CAST(`, `VARCHAR(`, `ANY(`), where the source's
+/// spacing is kept.
+pub const SPACE_BEFORE_PAREN: &[&str] = &[
+  "AND",
+  "AS",
+  "BETWEEN",
+  "BY",
+  "CASE",
+  "CONFLICT",
+  "DO",
+  "ELSE",
+  "EXCEPT",
+  "EXISTS",
+  "FILTER",
+  "FROM",
+  "GROUP",
+  "HAVING",
+  "IN",
+  "INTERSECT",
+  "IS",
+  "JOIN",
+  "LATERAL",
+  "LIKE",
+  "MINUS",
+  "NOT",
+  "ON",
+  "OR",
+  "OVER",
+  "RETURN",
+  "SELECT",
+  "SET",
+  "THEN",
+  "UNION",
+  "USING",
+  "WHEN",
+  "WHERE",
+  "WHILE",
+  "WITH",
+];
+
+/// Words that start a T-SQL statement, which is where the condition of an `IF` or `WHILE` ends.
+pub const TSQL_STATEMENT_KEYWORDS: &[&str] = &[
+  "ALTER",
+  "BACKUP",
+  "BEGIN",
+  "BREAK",
+  "BULK",
+  "CHECKPOINT",
+  "CLOSE",
+  "COMMIT",
+  "CONTINUE",
+  "CREATE",
+  "DBCC",
+  "DEALLOCATE",
+  "DECLARE",
+  "DELETE",
+  "DENY",
+  "DISABLE",
+  "DROP",
+  "ENABLE",
+  "EXEC",
+  "EXECUTE",
+  "FETCH",
+  "GOTO",
+  "GRANT",
+  "IF",
+  "INSERT",
+  "KILL",
+  "MERGE",
+  "OPEN",
+  "PRINT",
+  "RAISERROR",
+  "RECONFIGURE",
+  "RESTORE",
+  "RETURN",
+  "REVOKE",
+  "ROLLBACK",
+  "SAVE",
+  "SELECT",
+  "SET",
+  "SETUSER",
+  "SHUTDOWN",
+  "THROW",
+  "TRUNCATE",
+  "UPDATE",
+  "USE",
+  "WAITFOR",
+  "WHILE",
+  "WITH",
+];
+
+/// The kinds of objects that are created and dropped, which an `IF [NOT] EXISTS` may follow.
+pub const OBJECT_KINDS: &[&str] = &[
+  "AGGREGATE",
+  "ASSEMBLY",
+  "BODY",
+  "COLUMN",
+  "CONSTRAINT",
+  "DATABASE",
+  "DOMAIN",
+  "EVENT",
+  "EXTENSION",
+  "FUNCTION",
+  "INDEX",
+  "KEY",
+  "LOGIN",
+  "PACKAGE",
+  "PARTITION",
+  "POLICY",
+  "PROC",
+  "PROCEDURE",
+  "ROLE",
+  "RULE",
+  "SCHEMA",
+  "SEQUENCE",
+  "SERVER",
+  "STATISTICS",
+  "SYNONYM",
+  "TABLE",
+  "TABLESPACE",
+  "TRIGGER",
+  "TYPE",
+  "USER",
+  "VIEW",
+];
+
+/// Names of types, which are keywords where a type is expected (ex. after `::`).
+pub const TYPES: &[&str] = &[
+  "BIGINT",
+  "BIGSERIAL",
+  "BINARY",
+  "BIT",
+  "BLOB",
+  "BOOL",
+  "BOOLEAN",
+  "BYTEA",
+  "CHAR",
+  "CHARACTER",
+  "CIDR",
+  "CLOB",
+  "DATE",
+  "DATETIME",
+  "DATETIME2",
+  "DECIMAL",
+  "DOUBLE",
+  "FLOAT",
+  "INET",
+  "INT",
+  "INT2",
+  "INT4",
+  "INT8",
+  "INTEGER",
+  "INTERVAL",
+  "JSON",
+  "JSONB",
+  "MONEY",
+  "NUMBER",
+  "NUMERIC",
+  "NVARCHAR",
+  "REAL",
+  "REGCLASS",
+  "SERIAL",
+  "SMALLINT",
+  "TEXT",
+  "TIME",
+  "TIMESTAMP",
+  "TIMESTAMPTZ",
+  "TIMETZ",
+  "TINYINT",
+  "UUID",
+  "VARBINARY",
+  "VARCHAR",
+  "XML",
+];
+
+#[cfg(test)]
+mod test {
+  use super::*;
+
+  #[test]
+  fn tables_are_sorted_and_uppercase() {
+    for table in [
+      RESERVED,
+      VALUE_KEYWORDS,
+      SPACE_BEFORE_PAREN,
+      TSQL_STATEMENT_KEYWORDS,
+      OBJECT_KINDS,
+      TYPES,
+    ] {
+      for pair in table.windows(2) {
+        assert_eq!(
+          cmp_ignore_ascii_case(pair[0], pair[1]),
+          Ordering::Less,
+          "{} should come before {}",
+          pair[0],
+          pair[1]
+        );
+      }
+      for word in table {
+        assert_eq!(word.to_ascii_uppercase(), *word);
+      }
+    }
+  }
+
+  #[test]
+  fn looks_up_ignoring_case() {
+    assert!(contains(RESERVED, "select"));
+    assert!(contains(RESERVED, "SeLeCt"));
+    assert!(!contains(RESERVED, "name"));
+    assert!(contains(RESERVED, "auto_increment"));
+  }
+}

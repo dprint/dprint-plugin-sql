@@ -1,0 +1,71 @@
+== should format a transaction ==
+BEGIN;
+UPDATE accounts SET balance = balance - 100 WHERE id = 1;
+UPDATE accounts SET balance = balance + 100 WHERE id = 2;
+COMMIT;
+
+[expect]
+BEGIN;
+UPDATE accounts
+SET balance = balance - 100
+WHERE id = 1;
+UPDATE accounts
+SET balance = balance + 100
+WHERE id = 2;
+COMMIT;
+
+== should format begin transaction ==
+BEGIN TRANSACTION;
+ROLLBACK TRANSACTION;
+
+[expect]
+BEGIN TRANSACTION;
+ROLLBACK TRANSACTION;
+
+== should format start transaction ==
+START TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+COMMIT;
+
+[expect]
+START TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+COMMIT;
+
+== should format savepoints ==
+SAVEPOINT a;
+ROLLBACK TO SAVEPOINT a;
+RELEASE SAVEPOINT a;
+
+[expect]
+SAVEPOINT a;
+ROLLBACK TO SAVEPOINT a;
+RELEASE SAVEPOINT a;
+
+== should format begin work ==
+BEGIN WORK;
+COMMIT WORK;
+
+[expect]
+BEGIN WORK;
+COMMIT WORK;
+
+== should format sqlite's begin ==
+BEGIN IMMEDIATE TRANSACTION;
+END TRANSACTION;
+
+[expect]
+BEGIN IMMEDIATE TRANSACTION;
+END TRANSACTION;
+
+== should format set statements ==
+SET search_path TO app, public;
+SET TIME ZONE 'UTC';
+
+[expect]
+SET search_path TO app, public;
+SET TIME ZONE 'UTC';
+
+== should format use ==
+USE my_database;
+
+[expect]
+USE my_database;

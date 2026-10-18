@@ -1,0 +1,150 @@
+~~ dialect: postgresql ~~
+== should format operators ==
+SELECT data->>'name', data->'a'->'b', data#>>'{a,b}', tags@>ARRAY['x'], tags<@ARRAY['y'], doc@@query, a||b, a<->b FROM t WHERE data?'key' AND data?|ARRAY['a'] AND name~*'^a' AND name!~'b';
+
+[expect]
+SELECT
+  data ->> 'name',
+  data -> 'a' -> 'b',
+  data #>> '{a,b}',
+  tags @> ARRAY['x'],
+  tags <@ ARRAY['y'],
+  doc @@ query,
+  a || b,
+  a <-> b
+FROM t
+WHERE data ? 'key' AND data ?| ARRAY['a'] AND name ~* '^a' AND name !~ 'b';
+
+== should format casts ==
+SELECT a::int, '1'::numeric(10,2), b::text[], (c + d)::bigint, now()::date FROM t;
+
+[expect]
+SELECT a::int, '1'::numeric(10, 2), b::text[], (c + d)::bigint, now()::date
+FROM t;
+
+== should format dollar quoted strings ==
+SELECT $$it's$$, $tag$a $$ b$tag$;
+
+[expect]
+SELECT $$it's$$, $tag$a $$ b$tag$;
+
+== should format arrays ==
+SELECT ARRAY[1, 2, 3], a[1], a[1:2], a[:2], ARRAY[[1, 2], [3, 4]] FROM t;
+
+[expect]
+SELECT ARRAY[1, 2, 3], a[1], a[1:2], a[:2], ARRAY[[1, 2], [3, 4]]
+FROM t;
+
+== should format escape strings ==
+SELECT E'line\nbreak', E'it\'s', U&'d\0061t\+000061';
+
+[expect]
+SELECT E'line\nbreak', E'it\'s', U&'d\0061t\+000061';
+
+== should format nested comments ==
+SELECT 1 /* outer /* inner */ still a comment */;
+
+[expect]
+SELECT 1 /* outer /* inner */ still a comment */;
+
+== should format psql meta commands ==
+\set ON_ERROR_STOP on
+\connect mydb
+SELECT 1;
+\i other.sql
+
+[expect]
+\set ON_ERROR_STOP on
+\connect mydb
+SELECT 1;
+\i other.sql
+
+== should format psql variables ==
+SELECT * FROM t WHERE id = :id AND name = :'name' AND col = :"column";
+
+[expect]
+SELECT *
+FROM t
+WHERE id = :id AND name = :'name' AND col = :"column";
+
+== should format copy data ==
+COPY t (a, b) FROM stdin;
+1	foo
+2	bar
+\.
+SELECT 1;
+
+[expect]
+COPY t (a, b) FROM stdin;
+1	foo
+2	bar
+\.
+SELECT 1;
+
+== should format psql's escaped semicolon ==
+SELECT 1 \; SELECT 2;
+
+[expect]
+SELECT 1\;
+SELECT 2;
+
+== should format on conflict ==
+INSERT INTO t (a, b) VALUES (1, 2) ON CONFLICT ON CONSTRAINT t_pkey DO UPDATE SET b = EXCLUDED.b;
+
+[expect]
+INSERT INTO t (a, b)
+VALUES (1, 2)
+ON CONFLICT ON CONSTRAINT t_pkey DO UPDATE
+SET b = EXCLUDED.b;
+
+== should format distinct on and filter ==
+SELECT DISTINCT ON (a) a, count(*) FILTER (WHERE b) FROM t GROUP BY a ORDER BY a;
+
+[expect]
+SELECT DISTINCT ON (a) a, count(*) FILTER (WHERE b)
+FROM t
+GROUP BY a
+ORDER BY a;
+
+== should format returning ==
+DELETE FROM t WHERE a < now() - INTERVAL '30 days' RETURNING *;
+
+[expect]
+DELETE FROM t
+WHERE a < now() - INTERVAL '30 days'
+RETURNING *;
+
+== should format the hash operator ==
+SELECT a # b, a #- '{x}' FROM t;
+
+[expect]
+SELECT a # b, a #- '{x}'
+FROM t;
+
+== should format on conflict do select ==
+INSERT INTO t (a) VALUES (2) ON CONFLICT (a) DO SELECT WHERE t.b = 1 RETURNING t.a;
+
+[expect]
+INSERT INTO t (a)
+VALUES (2)
+ON CONFLICT (a) DO SELECT
+WHERE t.b = 1
+RETURNING t.a;
+
+== should keep unicode whitespace in a name ==
+SELECT a b, c　d FROM t;
+
+[expect]
+SELECT a b, c　d
+FROM t;
+
+== should keep the line break between strings that are joined ==
+select 'foo'
+'bar' as x, 'a' 'b' as y from t;
+
+[expect]
+select
+  'foo'
+  'bar' as x,
+  'a' 'b' as y
+from t;

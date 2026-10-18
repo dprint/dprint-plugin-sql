@@ -1,0 +1,141 @@
+== should format a create view ==
+CREATE VIEW v AS SELECT a, b FROM t WHERE c = 1;
+
+[expect]
+CREATE VIEW v AS
+SELECT a, b
+FROM t
+WHERE c = 1;
+
+== should format create or replace view ==
+CREATE OR REPLACE VIEW v (x, y) AS SELECT a, b FROM t;
+
+[expect]
+CREATE OR REPLACE VIEW v (x, y) AS
+SELECT a, b
+FROM t;
+
+== should format a materialized view ==
+CREATE MATERIALIZED VIEW mv AS SELECT a, count(*) FROM t GROUP BY a WITH DATA;
+
+[expect]
+CREATE MATERIALIZED VIEW mv AS
+SELECT a, count(*)
+FROM t
+GROUP BY a WITH DATA;
+
+== should format a view of a cte ==
+CREATE VIEW v AS WITH a AS (SELECT 1 AS x) SELECT x FROM a;
+
+[expect]
+CREATE VIEW v AS
+WITH a AS (SELECT 1 AS x)
+SELECT x
+FROM a;
+
+== should format a create index ==
+CREATE UNIQUE INDEX IF NOT EXISTS idx ON t (a, b DESC) WHERE c IS NULL;
+
+[expect]
+CREATE UNIQUE INDEX IF NOT EXISTS idx ON t (a, b DESC) WHERE c IS NULL;
+
+== should format an alter table with one action ==
+ALTER TABLE t ADD COLUMN c INT NOT NULL DEFAULT 0;
+
+[expect]
+ALTER TABLE t ADD COLUMN c INT NOT NULL DEFAULT 0;
+
+== should format an alter table with several actions ==
+ALTER TABLE t ADD COLUMN c INT, DROP COLUMN d;
+
+[expect]
+ALTER TABLE t ADD COLUMN c INT, DROP COLUMN d;
+
+== should break an alter table that doesn't fit ==
+ALTER TABLE customers ADD COLUMN middle_name VARCHAR(100), ADD COLUMN suffix VARCHAR(20), DROP COLUMN fax_number, DROP COLUMN pager;
+
+[expect]
+ALTER TABLE customers
+  ADD COLUMN middle_name VARCHAR(100),
+  ADD COLUMN suffix VARCHAR(20),
+  DROP COLUMN fax_number,
+  DROP COLUMN pager;
+
+== should format alter table actions on lines of their own ==
+ALTER TABLE t
+ADD CONSTRAINT fk FOREIGN KEY (a) REFERENCES u (id)
+
+[expect]
+ALTER TABLE t ADD CONSTRAINT fk FOREIGN KEY (a) REFERENCES u (id)
+
+== should format alter column ==
+ALTER TABLE t ALTER COLUMN a SET DEFAULT 1, ALTER COLUMN b TYPE TEXT;
+
+[expect]
+ALTER TABLE t ALTER COLUMN a SET DEFAULT 1, ALTER COLUMN b TYPE TEXT;
+
+== should format rename ==
+ALTER TABLE t RENAME COLUMN a TO b;
+
+[expect]
+ALTER TABLE t RENAME COLUMN a TO b;
+
+== should format drops ==
+DROP TABLE IF EXISTS a, b CASCADE;
+DROP VIEW v;
+DROP INDEX idx;
+
+[expect]
+DROP TABLE IF EXISTS a, b CASCADE;
+DROP VIEW v;
+DROP INDEX idx;
+
+== should format truncate ==
+TRUNCATE TABLE t RESTART IDENTITY;
+
+[expect]
+TRUNCATE TABLE t RESTART IDENTITY;
+
+== should format grants ==
+GRANT SELECT, INSERT ON t TO u WITH GRANT OPTION;
+REVOKE ALL ON t FROM u;
+
+[expect]
+GRANT SELECT, INSERT ON t TO u WITH GRANT OPTION;
+REVOKE ALL ON t FROM u;
+
+== should format a create schema ==
+CREATE SCHEMA IF NOT EXISTS app AUTHORIZATION admin;
+
+[expect]
+CREATE SCHEMA IF NOT EXISTS app AUTHORIZATION admin;
+
+== should format a create sequence ==
+CREATE SEQUENCE s START WITH 1 INCREMENT BY 1;
+
+[expect]
+CREATE SEQUENCE s START WITH 1 INCREMENT BY 1;
+
+== should format comments on objects ==
+COMMENT ON TABLE t IS 'the table';
+
+[expect]
+COMMENT ON TABLE t IS 'the table';
+
+== should format a create type ==
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+[expect]
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+== should format a create domain ==
+CREATE DOMAIN positive AS INT CHECK (VALUE > 0);
+
+[expect]
+CREATE DOMAIN positive AS INT CHECK (VALUE > 0);
+
+== should format a create extension ==
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+[expect]
+CREATE EXTENSION IF NOT EXISTS pgcrypto;

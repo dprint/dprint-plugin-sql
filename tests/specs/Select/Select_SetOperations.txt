@@ -1,0 +1,106 @@
+== should put set operators on their own lines ==
+SELECT a FROM t UNION SELECT a FROM u;
+
+[expect]
+SELECT a
+FROM t
+UNION
+SELECT a
+FROM u;
+
+== should format union all ==
+SELECT a FROM t UNION ALL SELECT a FROM u UNION ALL SELECT a FROM v;
+
+[expect]
+SELECT a
+FROM t
+UNION ALL
+SELECT a
+FROM u
+UNION ALL
+SELECT a
+FROM v;
+
+== should format intersect and except ==
+SELECT a FROM t INTERSECT SELECT a FROM u EXCEPT SELECT a FROM v;
+
+[expect]
+SELECT a
+FROM t
+INTERSECT
+SELECT a
+FROM u
+EXCEPT
+SELECT a
+FROM v;
+
+== should format minus ==
+SELECT a FROM t MINUS SELECT a FROM u;
+
+[expect]
+SELECT a
+FROM t
+MINUS
+SELECT a
+FROM u;
+
+== should format union distinct ==
+SELECT a FROM t UNION DISTINCT SELECT a FROM u;
+
+[expect]
+SELECT a
+FROM t
+UNION DISTINCT
+SELECT a
+FROM u;
+
+== should format queries in brackets ==
+(SELECT a FROM t) UNION (SELECT a FROM u) ORDER BY a;
+
+[expect]
+(SELECT a FROM t)
+UNION
+(SELECT a FROM u)
+ORDER BY a;
+
+== should format an order by after the set operations ==
+SELECT a FROM t UNION SELECT b FROM u ORDER BY 1 LIMIT 5;
+
+[expect]
+SELECT a
+FROM t
+UNION
+SELECT b
+FROM u
+ORDER BY 1
+LIMIT 5;
+
+== should format a set operation within a subquery ==
+SELECT * FROM (SELECT a FROM t UNION SELECT a FROM u) AS x;
+
+[expect]
+SELECT *
+FROM (SELECT a FROM t UNION SELECT a FROM u) AS x;
+
+== should not read bigquery's except as a set operator ==
+SELECT * EXCEPT (a, b) FROM t;
+
+[expect]
+SELECT * EXCEPT (a, b)
+FROM t;
+
+== should format every set operator alike (issue #3) ==
+SELECT unnest(new_tags) UNION  SELECT unnest(previous_tags);
+SELECT unnest(new_tags) INTERSECT  SELECT unnest(previous_tags);
+SELECT unnest(new_tags) EXCEPT  SELECT unnest(previous_tags);
+
+[expect]
+SELECT unnest(new_tags)
+UNION
+SELECT unnest(previous_tags);
+SELECT unnest(new_tags)
+INTERSECT
+SELECT unnest(previous_tags);
+SELECT unnest(new_tags)
+EXCEPT
+SELECT unnest(previous_tags);

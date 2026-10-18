@@ -1,0 +1,45 @@
+== should leave the statement after an ignore comment alone ==
+SELECT   1;
+-- dprint-ignore
+SELECT   a,b
+  FROM   t;
+SELECT   2;
+
+[expect]
+SELECT 1;
+-- dprint-ignore
+SELECT   a,b
+  FROM   t;
+SELECT 2;
+
+== should leave a procedure after an ignore comment alone ==
+/* dprint-ignore */
+CREATE PROCEDURE p() BEGIN
+    SELECT 1;
+END;
+SELECT   3;
+
+[expect]
+/* dprint-ignore */
+CREATE PROCEDURE p() BEGIN
+    SELECT 1;
+END;
+SELECT 3;
+
+== should only ignore the next statement ==
+-- dprint-ignore
+SELECT   1;
+SELECT   2;
+
+[expect]
+-- dprint-ignore
+SELECT   1;
+SELECT 2;
+
+== should not read a longer word as an ignore comment ==
+-- dprint-ignored
+SELECT   1;
+
+[expect]
+-- dprint-ignored
+SELECT 1;

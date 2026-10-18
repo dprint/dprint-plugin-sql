@@ -1,0 +1,77 @@
+~~ casing: upper ~~
+== should uppercase keywords ==
+select a, b from t where c = 1 and d is not null order by a desc;
+
+[expect]
+SELECT a, b
+FROM t
+WHERE c = 1 AND d IS NOT NULL
+ORDER BY a DESC;
+
+== should not uppercase names ==
+select name, value, key, type, status, first, last from users;
+
+[expect]
+SELECT name, value, key, type, status, first, last
+FROM users;
+
+== should not uppercase quoted names or names in qualified names ==
+select "select", t.order, t.from, x.date from t;
+
+[expect]
+SELECT "select", t.order, t.from, x.date
+FROM t;
+
+== should uppercase keywords that are only keywords where they are ==
+create table t (id int primary key, b int references u (id) on delete no action);
+select a from t order by a nulls first fetch next 5 rows only;
+
+[expect]
+CREATE TABLE t (id INT PRIMARY KEY, b INT REFERENCES u (id) ON DELETE NO ACTION);
+SELECT a
+FROM t
+ORDER BY a NULLS FIRST
+FETCH NEXT 5 ROWS ONLY;
+
+== should uppercase the keywords of procedural code ==
+create procedure p() begin declare x int default 0; if x > 0 then set x = 1; end if; while x < 10 do set x = x + 1; end while; end;
+
+[expect]
+CREATE PROCEDURE p()
+BEGIN
+  DECLARE x INT DEFAULT 0;
+  IF x > 0 THEN
+    SET x = 1;
+  END IF;
+  WHILE x < 10 DO
+    SET x = x + 1;
+  END WHILE;
+END;
+
+== should uppercase types after casts ==
+select a::integer, b::text, c::my_type from t;
+
+[expect]
+SELECT a::INTEGER, b::TEXT, c::my_type
+FROM t;
+
+== should not uppercase functions ==
+select count(*), coalesce(a, b), now() from t;
+
+[expect]
+SELECT count(*), coalesce(a, b), now()
+FROM t;
+
+== should keep the case of a table named like a keyword ==
+select * from transaction t join view v on t.id = v.id;
+update transaction set a = 1;
+create view v as select 1;
+
+[expect]
+SELECT *
+FROM transaction t
+  JOIN view v ON t.id = v.id;
+UPDATE transaction
+SET a = 1;
+CREATE VIEW v AS
+SELECT 1;

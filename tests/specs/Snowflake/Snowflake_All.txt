@@ -1,0 +1,129 @@
+~~ dialect: snowflake ~~
+== should format a procedure and its body ==
+CREATE OR REPLACE PROCEDURE p(x INT) RETURNS VARCHAR LANGUAGE SQL AS $$
+DECLARE result VARCHAR;
+BEGIN
+IF (x > 0) THEN result := 'positive'; ELSE result := 'other'; END IF;
+RETURN result;
+END;
+$$;
+
+[expect]
+CREATE OR REPLACE PROCEDURE p(x INT)
+RETURNS VARCHAR
+LANGUAGE SQL
+AS $$
+DECLARE
+  result VARCHAR;
+BEGIN
+  IF (x > 0) THEN
+    result := 'positive';
+  ELSE
+    result := 'other';
+  END IF;
+  RETURN result;
+END;
+$$;
+
+== should leave a javascript body alone ==
+CREATE PROCEDURE js() RETURNS STRING LANGUAGE JAVASCRIPT AS $$
+  return   "x";
+$$;
+
+[expect]
+CREATE PROCEDURE js()
+RETURNS STRING
+LANGUAGE JAVASCRIPT
+AS $$
+  return   "x";
+$$;
+
+== should format an anonymous block ==
+DECLARE c INT DEFAULT 0;
+BEGIN
+FOR i IN 1 TO 10 DO c := c + i; END FOR;
+RETURN c;
+END;
+
+[expect]
+DECLARE
+  c INT DEFAULT 0;
+BEGIN
+  FOR i IN 1 TO 10 DO
+    c := c + i;
+  END FOR;
+  RETURN c;
+END;
+
+== should format execute immediate ==
+EXECUTE IMMEDIATE $$ SELECT 1 $$;
+
+[expect]
+EXECUTE IMMEDIATE $$ SELECT 1 $$;
+
+== should format double slash comments ==
+SELECT 1; // a comment
+// another
+SELECT 2;
+
+[expect]
+SELECT 1; // a comment
+// another
+SELECT 2;
+
+== should format semi-structured access ==
+SELECT v:name::string, v:address.city, v['key'], f.value FROM t, LATERAL FLATTEN(input => t.v:items) f;
+
+[expect]
+SELECT v:name::string, v:address.city, v['key'], f.value
+FROM t, LATERAL FLATTEN(input => t.v:items) f;
+
+== should format positional columns ==
+SELECT $1, $2 FROM @my_stage;
+
+[expect]
+SELECT $1, $2
+FROM @my_stage;
+
+== should format copy into ==
+COPY INTO t FROM @stage FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1) ON_ERROR = 'CONTINUE';
+
+[expect]
+COPY INTO t FROM @stage FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1) ON_ERROR = 'CONTINUE';
+
+== should format qualify ==
+SELECT * FROM t QUALIFY ROW_NUMBER() OVER (PARTITION BY a ORDER BY b) = 1;
+
+[expect]
+SELECT *
+FROM t
+QUALIFY ROW_NUMBER() OVER (PARTITION BY a ORDER BY b) = 1;
+
+== should format match recognize ==
+SELECT * FROM t MATCH_RECOGNIZE (PARTITION BY a ORDER BY b MEASURES FIRST(b) AS start_b ONE ROW PER MATCH PATTERN (up+ down+) DEFINE up AS price > LAG(price), down AS price < LAG(price));
+
+[expect]
+SELECT *
+FROM t MATCH_RECOGNIZE (
+  PARTITION BY a
+  ORDER BY b
+  MEASURES FIRST(b) AS start_b
+  ONE ROW PER MATCH
+  PATTERN (up+ down+)
+  DEFINE up AS price > LAG(price), down AS price < LAG(price)
+);
+
+== should keep the paths of stages and files ==
+COPY INTO t FROM   @my_stage/path/file.csv;
+SELECT * FROM @%t;
+PUT file:///tmp/x.csv @~/staged;
+LIST @my_stage/data/2024/;
+REMOVE @%mytable/old;
+
+[expect]
+COPY INTO t FROM @my_stage/path/file.csv;
+SELECT *
+FROM @%t;
+PUT file:///tmp/x.csv @~/staged;
+LIST @my_stage/data/2024/;
+REMOVE @%mytable/old;

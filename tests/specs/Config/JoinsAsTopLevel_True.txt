@@ -1,0 +1,10 @@
+~~ joinsAsTopLevel: true ~~
+== should write joins at the indentation of from ==
+SELECT u.name, o.total FROM users u INNER JOIN orders o ON u.id = o.user_id LEFT JOIN payments p ON o.id = p.order_id WHERE o.total > 100;
+
+[expect]
+SELECT u.name, o.total
+FROM users u
+INNER JOIN orders o ON u.id = o.user_id
+LEFT JOIN payments p ON o.id = p.order_id
+WHERE o.total > 100;

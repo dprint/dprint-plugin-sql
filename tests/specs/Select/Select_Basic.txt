@@ -1,0 +1,215 @@
+== should format a simple select ==
+SELECT *   FROM   dbo.Test    WHERE   test =   'asdf'
+
+[expect]
+SELECT *
+FROM dbo.Test
+WHERE test = 'asdf'
+
+== should put each clause on its own line ==
+select a, b from t where c = 1 group by a, b having count(*) > 1 order by a desc limit 10 offset 5;
+
+[expect]
+select a, b
+from t
+where c = 1
+group by a, b
+having count(*) > 1
+order by a desc
+limit 10
+offset 5;
+
+== should keep a select without a from on one line ==
+SELECT 1;
+
+[expect]
+SELECT 1;
+
+== should format distinct ==
+SELECT DISTINCT a, b FROM t;
+
+[expect]
+SELECT DISTINCT a, b
+FROM t;
+
+== should format distinct on ==
+SELECT DISTINCT ON (a) a, b FROM t ORDER BY a, b DESC;
+
+[expect]
+SELECT DISTINCT ON (a) a, b
+FROM t
+ORDER BY a, b DESC;
+
+== should format top ==
+SELECT TOP 10 a FROM t;
+
+[expect]
+SELECT TOP 10 a
+FROM t;
+
+== should format top with brackets and percent ==
+SELECT TOP (10) PERCENT WITH TIES a FROM t ORDER BY a;
+
+[expect]
+SELECT TOP (10) PERCENT WITH TIES a
+FROM t
+ORDER BY a;
+
+== should format all ==
+SELECT ALL a FROM t;
+
+[expect]
+SELECT ALL a
+FROM t;
+
+== should format aliases ==
+SELECT a AS x, b y, t.c FROM tbl AS t;
+
+[expect]
+SELECT a AS x, b y, t.c
+FROM tbl AS t;
+
+== should format qualified wildcards ==
+SELECT t.*, u.* FROM t, u;
+
+[expect]
+SELECT t.*, u.*
+FROM t, u;
+
+== should format multiple statements ==
+SELECT 1; SELECT 2; SELECT 3
+
+[expect]
+SELECT 1;
+SELECT 2;
+SELECT 3
+
+== should keep statements without semicolons apart ==
+SELECT 1;
+SELECT 2
+
+[expect]
+SELECT 1;
+SELECT 2
+
+== should format an empty statement ==
+;
+
+[expect]
+;
+
+== should format into ==
+SELECT a, b INTO new_table FROM t;
+
+[expect]
+SELECT a, b
+INTO new_table
+FROM t;
+
+== should format a long select list over several lines ==
+SELECT customer_id, first_name, last_name, email_address, phone_number, street_address, city, region, postal_code, country FROM customers;
+
+[expect]
+SELECT
+  customer_id,
+  first_name,
+  last_name,
+  email_address,
+  phone_number,
+  street_address,
+  city,
+  region,
+  postal_code,
+  country
+FROM customers;
+
+== should keep a short select list on one line ==
+SELECT
+  a,
+  b
+FROM
+  t
+
+[expect]
+SELECT a, b
+FROM t
+
+== should format group by with rollup ==
+SELECT a, b, sum(c) FROM t GROUP BY ROLLUP (a, b);
+
+[expect]
+SELECT a, b, sum(c)
+FROM t
+GROUP BY ROLLUP (a, b);
+
+== should format group by all ==
+SELECT a, count(*) FROM t GROUP BY ALL;
+
+[expect]
+SELECT a, count(*)
+FROM t
+GROUP BY ALL;
+
+== should format order by with nulls ==
+SELECT a FROM t ORDER BY a ASC NULLS FIRST, b DESC NULLS LAST;
+
+[expect]
+SELECT a
+FROM t
+ORDER BY a ASC NULLS FIRST, b DESC NULLS LAST;
+
+== should format fetch first ==
+SELECT a FROM t ORDER BY a OFFSET 10 ROWS FETCH FIRST 5 ROWS ONLY;
+
+[expect]
+SELECT a
+FROM t
+ORDER BY a
+OFFSET 10 ROWS
+FETCH FIRST 5 ROWS ONLY;
+
+== should format for update ==
+SELECT a FROM t WHERE id = 1 FOR UPDATE SKIP LOCKED;
+
+[expect]
+SELECT a
+FROM t
+WHERE id = 1
+FOR UPDATE SKIP LOCKED;
+
+== should format a window clause ==
+SELECT sum(a) OVER w FROM t WINDOW w AS (PARTITION BY b ORDER BY c);
+
+[expect]
+SELECT sum(a) OVER w
+FROM t
+WINDOW w AS (PARTITION BY b ORDER BY c);
+
+== should format qualify ==
+SELECT a, row_number() OVER (PARTITION BY b ORDER BY c) AS rn FROM t QUALIFY rn = 1;
+
+[expect]
+SELECT a, row_number() OVER (PARTITION BY b ORDER BY c) AS rn
+FROM t
+QUALIFY rn = 1;
+
+== should format a table statement ==
+TABLE users;
+
+[expect]
+TABLE users;
+
+== should format values as a query ==
+VALUES (1, 'a'), (2, 'b');
+
+[expect]
+VALUES (1, 'a'), (2, 'b');
+
+== should format explain ==
+EXPLAIN ANALYZE SELECT * FROM t WHERE id = 1;
+
+[expect]
+EXPLAIN ANALYZE
+SELECT *
+FROM t
+WHERE id = 1;

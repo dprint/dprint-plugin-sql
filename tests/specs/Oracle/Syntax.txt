@@ -1,0 +1,149 @@
+~~ dialect: oracle ~~
+== should format quoted strings ==
+SELECT q'[it's]', Q'{a}', q'!b!', nq'(c)' FROM dual;
+
+[expect]
+SELECT q'[it's]', Q'{a}', q'!b!', nq'(c)'
+FROM dual;
+
+== should format bind variables ==
+SELECT * FROM t WHERE a = :a AND b = :1;
+
+[expect]
+SELECT *
+FROM t
+WHERE a = :a AND b = :1;
+
+== should format outer joins ==
+SELECT * FROM a, b WHERE a.id = b.id(+);
+
+[expect]
+SELECT *
+FROM a, b
+WHERE a.id = b.id(+);
+
+== should format hierarchical queries ==
+SELECT LEVEL, e.name FROM employees e START WITH e.manager_id IS NULL CONNECT BY PRIOR e.id = e.manager_id ORDER SIBLINGS BY e.name;
+
+[expect]
+SELECT LEVEL, e.name
+FROM employees e
+START WITH e.manager_id IS NULL
+CONNECT BY PRIOR e.id = e.manager_id
+ORDER SIBLINGS BY e.name;
+
+== should format sequences ==
+SELECT seq.NEXTVAL, seq.CURRVAL FROM dual;
+
+[expect]
+SELECT seq.NEXTVAL, seq.CURRVAL
+FROM dual;
+
+== should format sql plus commands ==
+SET SERVEROUTPUT ON
+SET DEFINE OFF
+PROMPT Don't stop now
+BEGIN DBMS_OUTPUT.PUT_LINE('hi'); END;
+/
+@other_script.sql
+SPOOL off
+
+[expect]
+SET SERVEROUTPUT ON
+SET DEFINE OFF
+PROMPT Don't stop now
+BEGIN
+  DBMS_OUTPUT.PUT_LINE('hi');
+END;
+/
+@other_script.sql
+SPOOL off
+
+== should format the slash separator after statements ==
+CREATE TABLE t (a NUMBER)
+/
+INSERT INTO t VALUES (1)
+/
+
+[expect]
+CREATE TABLE t (a NUMBER)
+/
+INSERT INTO t
+VALUES (1)
+/
+
+== should format substitution variables ==
+SELECT * FROM t WHERE a = &value AND b = &&other;
+
+[expect]
+SELECT *
+FROM t
+WHERE a = &value AND b = &&other;
+
+== should format database links ==
+SELECT * FROM employees@remote_db;
+
+[expect]
+SELECT *
+FROM employees@remote_db;
+
+== should format merge ==
+MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET t.a = s.a WHEN NOT MATCHED THEN INSERT (id, a) VALUES (s.id, s.a);
+
+[expect]
+MERGE INTO t
+USING s
+ON (t.id = s.id)
+WHEN MATCHED THEN
+  UPDATE SET t.a = s.a
+WHEN NOT MATCHED THEN
+  INSERT (id, a) VALUES (s.id, s.a);
+
+== should format returning into ==
+INSERT INTO t (a) VALUES (1) RETURNING id INTO v_id;
+
+[expect]
+INSERT INTO t (a)
+VALUES (1)
+RETURNING id INTO v_id;
+
+== should keep sql plus commands on their lines ==
+BEGIN NULL; END;
+/
+SHOW ERRORS
+CREATE OR REPLACE PROCEDURE b IS BEGIN NULL; END;
+/
+EXEC a
+COLUMN name FORMAT a20
+DESC t
+SELECT 1 FROM dual;
+
+[expect]
+BEGIN
+  NULL;
+END;
+/
+SHOW ERRORS
+CREATE OR REPLACE PROCEDURE b IS
+BEGIN
+  NULL;
+END;
+/
+EXEC a
+COLUMN name FORMAT a20
+DESC t
+SELECT 1
+FROM dual;
+
+== should continue a sql plus command after a dash ==
+EXECUTE dbms_stats.gather_schema_stats( -
+        'OE', -
+        cascade => TRUE);
+SELECT 1 FROM dual;
+
+[expect]
+EXECUTE dbms_stats.gather_schema_stats( -
+        'OE', -
+        cascade => TRUE);
+SELECT 1
+FROM dual;

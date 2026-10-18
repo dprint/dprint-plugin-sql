@@ -1,0 +1,129 @@
+== should format an insert ==
+INSERT INTO users (id, name, email) VALUES (1, 'test', 'test@example.com')
+
+[expect]
+INSERT INTO users (id, name, email)
+VALUES (1, 'test', 'test@example.com')
+
+== should format several rows ==
+INSERT INTO t (a, b) VALUES (1, 2), (3, 4), (5, 6);
+
+[expect]
+INSERT INTO t (a, b)
+VALUES (1, 2), (3, 4), (5, 6);
+
+== should format an insert without columns ==
+INSERT INTO t VALUES (1, 2);
+
+[expect]
+INSERT INTO t
+VALUES (1, 2);
+
+== should format an insert of a query ==
+INSERT INTO t (a, b) SELECT a, b FROM u WHERE c = 1;
+
+[expect]
+INSERT INTO t (a, b)
+SELECT a, b
+FROM u
+WHERE c = 1;
+
+== should format default values ==
+INSERT INTO t DEFAULT VALUES;
+
+[expect]
+INSERT INTO t DEFAULT VALUES;
+
+== should format on conflict do nothing ==
+INSERT INTO t (a) VALUES (1) ON CONFLICT DO NOTHING;
+
+[expect]
+INSERT INTO t (a)
+VALUES (1)
+ON CONFLICT DO NOTHING;
+
+== should format on conflict do update ==
+INSERT INTO t (a, b) VALUES (1, 2) ON CONFLICT (a) DO UPDATE SET b = EXCLUDED.b, c = t.c + 1 WHERE t.b IS DISTINCT FROM EXCLUDED.b;
+
+[expect]
+INSERT INTO t (a, b)
+VALUES (1, 2)
+ON CONFLICT (a) DO UPDATE
+SET b = EXCLUDED.b, c = t.c + 1
+WHERE t.b IS DISTINCT FROM EXCLUDED.b;
+
+== should format on duplicate key update ==
+INSERT INTO t (a, b) VALUES (1, 2) ON DUPLICATE KEY UPDATE b = VALUES(b), c = c + 1;
+
+[expect]
+INSERT INTO t (a, b)
+VALUES (1, 2)
+ON DUPLICATE KEY UPDATE b = VALUES(b), c = c + 1;
+
+== should format returning ==
+INSERT INTO t (a) VALUES (1) RETURNING id, a;
+
+[expect]
+INSERT INTO t (a)
+VALUES (1)
+RETURNING id, a;
+
+== should format an insert written over several lines ==
+INSERT INTO t (
+  a,
+  b
+)
+VALUES (1, 2);
+
+[expect]
+INSERT INTO t (
+  a,
+  b
+)
+VALUES (1, 2);
+
+== should format insert or replace ==
+INSERT OR REPLACE INTO t (a) VALUES (1);
+
+[expect]
+INSERT OR REPLACE INTO t (a)
+VALUES (1);
+
+== should format replace into ==
+REPLACE INTO t (a) VALUES (1);
+
+[expect]
+REPLACE INTO t (a)
+VALUES (1);
+
+== should format insert set ==
+INSERT INTO t SET a = 1, b = 2;
+
+[expect]
+INSERT INTO t
+SET a = 1, b = 2;
+
+== should format output ==
+INSERT INTO t (a) OUTPUT inserted.id VALUES (1);
+
+[expect]
+INSERT INTO t (a)
+OUTPUT inserted.id
+VALUES (1);
+
+== should format a long column list ==
+INSERT INTO customer_addresses (customer_id, street_address, city, region, postal_code, country_code) VALUES (1, '1 Main St', 'Springfield', 'IL', '62701', 'US');
+
+[expect]
+INSERT INTO customer_addresses (customer_id, street_address, city, region, postal_code, country_code)
+VALUES (1, '1 Main St', 'Springfield', 'IL', '62701', 'US');
+
+== should keep a row with a function call on one line when it fits (issue #12) ==
+INSERT INTO
+  `projects` (`name`, `night_of`)
+VALUES
+  ('R Wireless', unixepoch('2026-06-30 17:00:00-04:00'));
+
+[expect]
+INSERT INTO `projects` (`name`, `night_of`)
+VALUES ('R Wireless', unixepoch('2026-06-30 17:00:00-04:00'));

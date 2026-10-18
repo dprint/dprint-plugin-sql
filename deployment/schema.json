@@ -35,6 +35,11 @@
     }
   },
   "properties": {
+    "lineWidth": {
+      "description": "The width of a line the printer will try to stay under. Note that the printer may exceed this width in certain cases.",
+      "default": 120,
+      "type": "number"
+    },
     "indentWidth": {
       "description": "The number of characters for an indent.",
       "default": 2,
@@ -46,50 +51,66 @@
     "newLineKind": {
       "$ref": "#/definitions/newLineKind"
     },
-    "uppercase": {
-      "description": "Deprecated. Use 'casing' instead. Use ALL CAPS for reserved words.",
-      "default": false,
-      "type": "boolean"
-    },
-    "casing": {
-      "description": "Controls the casing of reserved words.",
-      "type": "string",
-      "default": "preserve",
-      "oneOf": [{
-        "const": "preserve",
-        "description": "Preserves the original casing of reserved words."
-      }, {
-        "const": "upper",
-        "description": "Converts reserved words to UPPERCASE."
-      }, {
-        "const": "lower",
-        "description": "Converts reserved words to lowercase."
-      }]
-    },
-    "linesBetweenQueries": {
-      "description": "Number of line breaks between queries.",
-      "default": 1,
-      "type": "number"
-    },
-    "joinsAsTopLevel": {
-      "description": "Consider JOIN statements as top-level keywords instead of reserved keywords.",
-      "default": false,
-      "type": "boolean"
-    },
     "dialect": {
-      "description": "The SQL dialect to use for parsing.",
+      "description": "The SQL dialect the files are written in, which decides how the text is split into tokens: which characters start a comment or quote an identifier, whether a backslash escapes a quote, and so on. The generic dialect accepts the syntax of all of the others where they don't conflict.",
       "type": "string",
       "default": "generic",
       "oneOf": [{
         "const": "generic",
-        "description": "Generic SQL syntax."
+        "description": "The syntax of all of the dialects where they don't conflict."
       }, {
         "const": "postgresql",
-        "description": "PostgreSQL syntax with array syntax and operators."
+        "description": "PostgreSQL, which also suits databases that use its syntax (ex. CockroachDB, DuckDB and Redshift)."
+      }, {
+        "const": "mysql",
+        "description": "MySQL and MariaDB."
       }, {
         "const": "sqlserver",
-        "description": "SQL Server syntax with bracketed identifiers and @variables."
+        "description": "Microsoft SQL Server and Azure SQL (T-SQL)."
+      }, {
+        "const": "sqlite",
+        "description": "SQLite."
+      }, {
+        "const": "oracle",
+        "description": "Oracle (PL/SQL)."
+      }, {
+        "const": "bigquery",
+        "description": "Google BigQuery."
+      }, {
+        "const": "snowflake",
+        "description": "Snowflake."
       }]
+    },
+    "casing": {
+      "description": "The casing of keywords. Names (ex. of tables and columns) and functions are left as written.",
+      "type": "string",
+      "default": "preserve",
+      "oneOf": [{
+        "const": "preserve",
+        "description": "Preserves the casing of keywords."
+      }, {
+        "const": "upper",
+        "description": "Converts keywords to UPPERCASE."
+      }, {
+        "const": "lower",
+        "description": "Converts keywords to lowercase."
+      }]
+    },
+    "uppercase": {
+      "description": "Deprecated. Use 'casing' instead. Use ALL CAPS for keywords.",
+      "default": false,
+      "type": "boolean"
+    },
+    "linesBetweenQueries": {
+      "description": "The minimum number of line breaks between statements at the top level of the file. A blank line between statements is kept regardless.",
+      "default": 1,
+      "type": "integer",
+      "minimum": 1
+    },
+    "joinsAsTopLevel": {
+      "description": "Whether to write joins at the indentation of the FROM keyword rather than indented beneath it.",
+      "default": false,
+      "type": "boolean"
     }
   }
 }

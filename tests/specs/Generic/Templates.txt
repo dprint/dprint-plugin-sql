@@ -1,0 +1,127 @@
+== should format template expressions ==
+select {{ ref('orders') }}.id, {{ dbt_utils.star(ref('customers')) }} from {{ ref('orders') }} where id = {{ var('id') }};
+
+[expect]
+select {{ ref('orders') }}.id, {{ dbt_utils.star(ref('customers')) }}
+from {{ ref('orders') }}
+where id = {{ var('id') }};
+
+== should keep template tags on lines of their own ==
+select id from t where 1 = 1
+{% if is_incremental() %}
+and updated_at > (select max(updated_at) from {{ this }})
+{% endif %}
+
+[expect]
+select id
+from t
+where 1 = 1
+  {% if is_incremental() %}
+  and updated_at > (select max(updated_at) from {{ this }})
+{% endif %}
+
+== should keep a template tag within a line ==
+select id from t where a = 1 {% if x %} and b = 2 {% endif %};
+
+[expect]
+select id
+from t
+where a = 1 {% if x %} and b = 2 {% endif %};
+
+== should keep a config block before a query ==
+{{ config(materialized='table') }}
+select 1 as id
+
+[expect]
+{{ config(materialized='table') }}
+select 1 as id
+
+== should keep template comments ==
+{# a comment #}
+select 1;
+
+[expect]
+{# a comment #}
+select 1;
+
+== should format a loop over columns ==
+select
+{% for column in columns %}
+{{ column }},
+{% endfor %}
+id
+from t
+
+[expect]
+select
+  {% for column in columns %}
+  {{ column }},
+  {% endfor %}
+  id
+from t
+
+== should keep a template tag spanning lines as it is ==
+select a
+{% if x
+  and y %}
+, b
+{% endif %}
+from t
+
+[expect]
+select
+  a
+  {% if x
+  and y %}
+  , b
+{% endif %}
+from t
+
+== should not move a comma across a template tag ==
+select
+  id
+  {% if include_email %}
+  , email
+  {% endif %}
+from users
+
+[expect]
+select
+  id
+  {% if include_email %}
+  , email
+{% endif %}
+from users
+
+== should keep a comma within template tags ==
+select
+  {% for c in cols %}
+  {{ c }}{% if not loop.last %},{% endif %}
+  {% endfor %}
+from t
+
+[expect]
+select
+  {% for c in cols %}
+  {{ c }}{% if not loop.last %}, {% endif %}
+{% endfor %}
+from t
+
+== should start a clause after a template tag ==
+select * from t
+-- c
+{% if x %} where b = 1 {% endif %}
+
+[expect]
+select *
+from t
+-- c
+{% if x %}
+where b = 1 {% endif %}
+
+== should format a list of template expressions as a list ==
+select {{ a }}, b, {{ c }} from t
+
+[expect]
+select {{ a }}, b, {{ c }}
+from t

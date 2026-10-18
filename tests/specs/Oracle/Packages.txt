@@ -1,0 +1,83 @@
+~~ dialect: oracle ~~
+== should format a package specification ==
+CREATE OR REPLACE PACKAGE emp_pkg AS
+c_max CONSTANT NUMBER := 100;
+PROCEDURE hire (p_name VARCHAR2);
+FUNCTION count_all RETURN NUMBER;
+END emp_pkg;
+/
+
+[expect]
+CREATE OR REPLACE PACKAGE emp_pkg AS
+  c_max CONSTANT NUMBER := 100;
+  PROCEDURE hire (p_name VARCHAR2);
+  FUNCTION count_all RETURN NUMBER;
+END emp_pkg;
+/
+
+== should format a package body ==
+CREATE OR REPLACE PACKAGE BODY emp_pkg AS
+PROCEDURE hire (p_name VARCHAR2) IS BEGIN INSERT INTO employees (name) VALUES (p_name); END hire;
+FUNCTION count_all RETURN NUMBER IS v NUMBER; BEGIN SELECT COUNT(*) INTO v FROM employees; RETURN v; END count_all;
+END emp_pkg;
+/
+
+[expect]
+CREATE OR REPLACE PACKAGE BODY emp_pkg AS
+  PROCEDURE hire (p_name VARCHAR2) IS
+  BEGIN
+    INSERT INTO employees (name)
+    VALUES (p_name);
+  END hire;
+  FUNCTION count_all RETURN NUMBER IS
+    v NUMBER;
+  BEGIN
+    SELECT COUNT(*)
+    INTO v
+    FROM employees;
+    RETURN v;
+  END count_all;
+END emp_pkg;
+/
+
+== should format a package body with an initialization block ==
+CREATE PACKAGE BODY p IS
+g_count NUMBER;
+PROCEDURE reset IS BEGIN g_count := 0; END;
+BEGIN
+g_count := 0;
+END p;
+/
+
+[expect]
+CREATE PACKAGE BODY p IS
+  g_count NUMBER;
+  PROCEDURE reset IS
+  BEGIN
+    g_count := 0;
+  END;
+BEGIN
+  g_count := 0;
+END p;
+/
+
+== should format a type body ==
+CREATE TYPE BODY demo_typ IS MEMBER FUNCTION get_square RETURN NUMBER IS x NUMBER; BEGIN SELECT c.col * c.col INTO x FROM t c; RETURN x; END; STATIC PROCEDURE reset IS BEGIN NULL; END; END;
+/
+
+[expect]
+CREATE TYPE BODY demo_typ IS
+  MEMBER FUNCTION get_square RETURN NUMBER IS
+    x NUMBER;
+  BEGIN
+    SELECT c.col * c.col
+    INTO x
+    FROM t c;
+    RETURN x;
+  END;
+  STATIC PROCEDURE reset IS
+  BEGIN
+    NULL;
+  END;
+END;
+/

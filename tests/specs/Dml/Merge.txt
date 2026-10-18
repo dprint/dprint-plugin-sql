@@ -1,0 +1,68 @@
+== should format a merge ==
+MERGE INTO target t USING source s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.name = s.name WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s.id, s.name);
+
+[expect]
+MERGE INTO target t
+USING source s
+ON t.id = s.id
+WHEN MATCHED THEN
+  UPDATE SET t.name = s.name
+WHEN NOT MATCHED THEN
+  INSERT (id, name) VALUES (s.id, s.name);
+
+== should format conditions of when ==
+MERGE INTO target AS t USING source AS s ON t.id = s.id WHEN MATCHED AND s.deleted = 1 THEN DELETE WHEN MATCHED THEN UPDATE SET t.name = s.name WHEN NOT MATCHED BY TARGET THEN INSERT (id) VALUES (s.id) WHEN NOT MATCHED BY SOURCE THEN DELETE;
+
+[expect]
+MERGE INTO target AS t
+USING source AS s
+ON t.id = s.id
+WHEN MATCHED AND s.deleted = 1 THEN
+  DELETE
+WHEN MATCHED THEN
+  UPDATE SET t.name = s.name
+WHEN NOT MATCHED BY TARGET THEN
+  INSERT (id) VALUES (s.id)
+WHEN NOT MATCHED BY SOURCE THEN
+  DELETE;
+
+== should format a merge using a subquery ==
+MERGE INTO t USING (SELECT id, name FROM u WHERE active = 1) AS s ON t.id = s.id WHEN MATCHED THEN UPDATE SET name = s.name;
+
+[expect]
+MERGE INTO t
+USING (SELECT id, name FROM u WHERE active = 1) AS s
+ON t.id = s.id
+WHEN MATCHED THEN
+  UPDATE SET name = s.name;
+
+== should format do nothing ==
+MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN DO NOTHING;
+
+[expect]
+MERGE INTO t
+USING s
+ON t.id = s.id
+WHEN MATCHED THEN
+  DO NOTHING;
+
+== should format output ==
+MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN DELETE OUTPUT $action, deleted.id;
+
+[expect]
+MERGE INTO t
+USING s
+ON t.id = s.id
+WHEN MATCHED THEN
+  DELETE
+OUTPUT $action, deleted.id;
+
+== should format a long set list ==
+MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.first_name = s.first_name, t.last_name = s.last_name, t.email = s.email, t.updated = s.updated;
+
+[expect]
+MERGE INTO t
+USING s
+ON t.id = s.id
+WHEN MATCHED THEN
+  UPDATE SET t.first_name = s.first_name, t.last_name = s.last_name, t.email = s.email, t.updated = s.updated;

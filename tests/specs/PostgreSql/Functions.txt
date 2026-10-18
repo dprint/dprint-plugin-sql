@@ -1,0 +1,381 @@
+~~ dialect: postgresql ~~
+== should format a plpgsql function and its body ==
+create or replace function public.increment(i integer) returns integer language plpgsql as $$
+declare result integer;
+begin
+result := i + 1;
+return result;
+end;
+$$;
+
+[expect]
+create or replace function public.increment(i integer)
+returns integer
+language plpgsql
+as $$
+declare
+  result integer;
+begin
+  result := i + 1;
+  return result;
+end;
+$$;
+
+== should format if statements ==
+CREATE FUNCTION sign_of(x int) RETURNS text AS $$
+BEGIN
+IF x > 0 THEN RETURN 'positive'; ELSIF x < 0 THEN RETURN 'negative'; ELSE RETURN 'zero'; END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+[expect]
+CREATE FUNCTION sign_of(x int)
+RETURNS text
+AS $$
+BEGIN
+  IF x > 0 THEN
+    RETURN 'positive';
+  ELSIF x < 0 THEN
+    RETURN 'negative';
+  ELSE
+    RETURN 'zero';
+  END IF;
+END;
+$$
+LANGUAGE plpgsql;
+
+== should format loops ==
+CREATE FUNCTION loops() RETURNS void AS $body$
+DECLARE r record; i int := 0;
+BEGIN
+LOOP i := i + 1; EXIT WHEN i > 10; END LOOP;
+WHILE i > 0 LOOP i := i - 1; END LOOP;
+FOR i IN 1..10 LOOP RAISE NOTICE '%', i; END LOOP;
+FOR i IN REVERSE 10..1 BY 2 LOOP CONTINUE WHEN i = 5; END LOOP;
+FOR r IN SELECT * FROM t WHERE t.active LOOP PERFORM do_something(r.id); END LOOP;
+FOREACH i IN ARRAY ARRAY[1, 2, 3] LOOP NULL; END LOOP;
+END;
+$body$ LANGUAGE plpgsql;
+
+[expect]
+CREATE FUNCTION loops()
+RETURNS void
+AS $body$
+DECLARE
+  r record;
+  i int := 0;
+BEGIN
+  LOOP
+    i := i + 1;
+    EXIT WHEN i > 10;
+  END LOOP;
+  WHILE i > 0 LOOP
+    i := i - 1;
+  END LOOP;
+  FOR i IN 1..10 LOOP
+    RAISE NOTICE '%', i;
+  END LOOP;
+  FOR i IN REVERSE 10..1 BY 2 LOOP
+    CONTINUE WHEN i = 5;
+  END LOOP;
+  FOR r IN SELECT * FROM t WHERE t.active LOOP
+    PERFORM do_something(r.id);
+  END LOOP;
+  FOREACH i IN ARRAY ARRAY[1, 2, 3] LOOP
+    NULL;
+  END LOOP;
+END;
+$body$
+LANGUAGE plpgsql;
+
+== should format a loop over a long query ==
+CREATE FUNCTION f() RETURNS void AS $$
+DECLARE r record;
+BEGIN
+FOR r IN SELECT id, name, email, created_at FROM users WHERE active = TRUE AND deleted_at IS NULL ORDER BY created_at LOOP
+PERFORM notify(r.id);
+END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+[expect]
+CREATE FUNCTION f()
+RETURNS void
+AS $$
+DECLARE
+  r record;
+BEGIN
+  FOR r IN
+    SELECT id, name, email, created_at
+    FROM users
+    WHERE active = TRUE AND deleted_at IS NULL
+    ORDER BY created_at
+  LOOP
+    PERFORM notify(r.id);
+  END LOOP;
+END;
+$$
+LANGUAGE plpgsql;
+
+== should format exception handlers ==
+CREATE FUNCTION safe_divide(a numeric, b numeric) RETURNS numeric AS $$
+BEGIN
+RETURN a / b;
+EXCEPTION WHEN division_by_zero THEN RAISE NOTICE 'division by zero'; RETURN NULL;
+WHEN OTHERS THEN RAISE;
+END;
+$$ LANGUAGE plpgsql;
+
+[expect]
+CREATE FUNCTION safe_divide(a numeric, b numeric)
+RETURNS numeric
+AS $$
+BEGIN
+  RETURN a / b;
+EXCEPTION
+  WHEN division_by_zero THEN
+    RAISE NOTICE 'division by zero';
+    RETURN NULL;
+  WHEN OTHERS THEN
+    RAISE;
+END;
+$$
+LANGUAGE plpgsql;
+
+== should format a case statement ==
+CREATE FUNCTION describe(x int) RETURNS text AS $$
+BEGIN
+CASE x WHEN 1 THEN RETURN 'one'; WHEN 2 THEN RETURN 'two'; ELSE RETURN 'many'; END CASE;
+END;
+$$ LANGUAGE plpgsql;
+
+[expect]
+CREATE FUNCTION describe(x int)
+RETURNS text
+AS $$
+BEGIN
+  CASE x
+    WHEN 1 THEN
+      RETURN 'one';
+    WHEN 2 THEN
+      RETURN 'two';
+    ELSE
+      RETURN 'many';
+  END CASE;
+END;
+$$
+LANGUAGE plpgsql;
+
+== should format nested blocks and labels ==
+CREATE FUNCTION nested() RETURNS void AS $$
+<<outer>>
+DECLARE x int := 1;
+BEGIN
+DECLARE x int := 2;
+BEGIN
+RAISE NOTICE '% %', outer.x, x;
+END;
+END;
+$$ LANGUAGE plpgsql;
+
+[expect]
+CREATE FUNCTION nested()
+RETURNS void
+AS $$
+<<outer>>
+DECLARE
+  x int := 1;
+BEGIN
+  DECLARE
+    x int := 2;
+  BEGIN
+    RAISE NOTICE '% %', outer.x, x;
+  END;
+END;
+$$
+LANGUAGE plpgsql;
+
+== should format return query ==
+CREATE FUNCTION active_users() RETURNS TABLE (id int, name text) AS $$
+BEGIN
+RETURN QUERY SELECT u.id, u.name FROM users u WHERE u.active;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+[expect]
+CREATE FUNCTION active_users()
+RETURNS TABLE (id int, name text)
+AS $$
+BEGIN
+  RETURN QUERY SELECT u.id, u.name FROM users u WHERE u.active;
+END;
+$$
+LANGUAGE plpgsql STABLE;
+
+== should format a sql function ==
+CREATE FUNCTION add(a int, b int) RETURNS int AS $$ SELECT a + b $$ LANGUAGE sql IMMUTABLE STRICT;
+
+[expect]
+CREATE FUNCTION add(a int, b int)
+RETURNS int
+AS $$ SELECT a + b $$
+LANGUAGE sql IMMUTABLE STRICT;
+
+== should format a sql function body over several lines ==
+CREATE FUNCTION active_count() RETURNS bigint LANGUAGE sql AS $$
+select count(*) from users where active
+$$;
+
+[expect]
+CREATE FUNCTION active_count()
+RETURNS bigint
+LANGUAGE sql
+AS $$
+select count(*)
+from users
+where active
+$$;
+
+== should format a standard sql body ==
+CREATE FUNCTION add(a int, b int) RETURNS int LANGUAGE sql IMMUTABLE BEGIN ATOMIC SELECT a + b; END;
+
+[expect]
+CREATE FUNCTION add(a int, b int)
+RETURNS int
+LANGUAGE sql IMMUTABLE
+BEGIN ATOMIC
+  SELECT a + b;
+END;
+
+== should format return as a body ==
+CREATE FUNCTION add(a int, b int) RETURNS int LANGUAGE sql RETURN a + b;
+
+[expect]
+CREATE FUNCTION add(a int, b int)
+RETURNS int
+LANGUAGE sql
+RETURN a + b;
+
+== should leave the body of another language alone ==
+CREATE FUNCTION py() RETURNS int AS $$
+    return   1
+$$ LANGUAGE plpython3u;
+
+[expect]
+CREATE FUNCTION py()
+RETURNS int
+AS $$
+    return   1
+$$
+LANGUAGE plpython3u;
+
+== should leave a body in a string alone ==
+CREATE FUNCTION f() RETURNS int AS 'select   1' LANGUAGE sql;
+
+[expect]
+CREATE FUNCTION f()
+RETURNS int
+AS 'select   1'
+LANGUAGE sql;
+
+== should format a trigger function ==
+CREATE OR REPLACE FUNCTION set_updated_at() RETURNS trigger AS $$
+BEGIN NEW.updated_at := now(); RETURN NEW; END;
+$$ LANGUAGE plpgsql;
+
+[expect]
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS trigger
+AS $$
+BEGIN
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$
+LANGUAGE plpgsql;
+
+== should format a function with many parameters ==
+CREATE FUNCTION make_user(p_first_name text, p_last_name text, p_email text, p_phone text DEFAULT NULL) RETURNS uuid AS $$
+BEGIN
+RETURN gen_random_uuid();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+[expect]
+CREATE FUNCTION make_user(p_first_name text, p_last_name text, p_email text, p_phone text DEFAULT NULL)
+RETURNS uuid
+AS $$
+BEGIN
+  RETURN gen_random_uuid();
+END;
+$$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+== should format dynamic sql ==
+CREATE FUNCTION count_rows(tbl text) RETURNS bigint AS $$
+DECLARE n bigint;
+BEGIN
+EXECUTE format('SELECT count(*) FROM %I', tbl) INTO n;
+RETURN n;
+END;
+$$ LANGUAGE plpgsql;
+
+[expect]
+CREATE FUNCTION count_rows(tbl text)
+RETURNS bigint
+AS $$
+DECLARE
+  n bigint;
+BEGIN
+  EXECUTE format('SELECT count(*) FROM %I', tbl) INTO n;
+  RETURN n;
+END;
+$$
+LANGUAGE plpgsql;
+
+== should format nested dollar quotes ==
+CREATE FUNCTION f() RETURNS void AS $outer$
+BEGIN
+EXECUTE $inner$ SELECT 1 $inner$;
+END;
+$outer$ LANGUAGE plpgsql;
+
+[expect]
+CREATE FUNCTION f()
+RETURNS void
+AS $outer$
+BEGIN
+  EXECUTE $inner$ SELECT 1 $inner$;
+END;
+$outer$
+LANGUAGE plpgsql;
+
+== should format select into and get diagnostics ==
+CREATE FUNCTION f() RETURNS int AS $$
+DECLARE n int; c int;
+BEGIN
+SELECT count(*) INTO STRICT n FROM t;
+UPDATE t SET a = 1;
+GET DIAGNOSTICS c = ROW_COUNT;
+RETURN n + c;
+END;
+$$ LANGUAGE plpgsql;
+
+[expect]
+CREATE FUNCTION f()
+RETURNS int
+AS $$
+DECLARE
+  n int;
+  c int;
+BEGIN
+  SELECT count(*)
+  INTO STRICT n
+  FROM t;
+  UPDATE t
+  SET a = 1;
+  GET DIAGNOSTICS c = ROW_COUNT;
+  RETURN n + c;
+END;
+$$
+LANGUAGE plpgsql;

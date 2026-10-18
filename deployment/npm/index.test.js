@@ -9,4 +9,4 @@ const result = formatter.formatText({
   fileText: "SELECT  *  FROM dbo.Test",
 });
 
-assert.strictEqual(result, "SELECT\n  *\nFROM\n  dbo.Test\n");
+assert.strictEqual(result, "SELECT *\nFROM dbo.Test\n");

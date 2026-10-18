@@ -1,0 +1,77 @@
+== should format only the statement the range is in ==
+select   1;
+select   [|2|];
+select   3;
+
+[expect]
+select   1;
+select 2;
+select   3;
+
+== should format the statements the range touches ==
+select   1;
+select   [|2;
+select|]   3;
+select   4;
+
+[expect]
+select   1;
+select 2;
+select 3;
+select   4;
+
+== should format the statement the cursor is in ==
+select   1;
+select   2  [||]  from   t;
+select   3;
+
+[expect]
+select   1;
+select 2
+from t;
+select   3;
+
+== should format a whole procedure when within it ==
+select   1;
+create procedure p() begin
+select   [||]2;
+end;
+select   3;
+
+[expect]
+select   1;
+create procedure p()
+begin
+  select 2;
+end;
+select   3;
+
+== should format nothing when the range only touches blank lines ==
+select   1;
+[|
+|]
+select   2;
+
+[expect]
+select   1;
+
+
+select   2;
+
+== should keep the blank lines around the range ==
+select   1;
+
+
+select   [|2|];
+
+
+select   3;
+
+[expect]
+select   1;
+
+
+select 2;
+
+
+select   3;

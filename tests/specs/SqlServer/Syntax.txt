@@ -1,0 +1,130 @@
+~~ dialect: sqlserver ~~
+== should format bracketed identifiers ==
+SELECT [Id], [First Name], [Weird]]Name] FROM [dbo].[Users] AS [u];
+
+[expect]
+SELECT [Id], [First Name], [Weird]]Name]
+FROM [dbo].[Users] AS [u];
+
+== should format temporary tables ==
+CREATE TABLE #t (Id INT);
+SELECT * INTO ##global FROM #t;
+DROP TABLE #t;
+
+[expect]
+CREATE TABLE #t (Id INT);
+SELECT *
+INTO ##global
+FROM #t;
+DROP TABLE #t;
+
+== should format variables ==
+DECLARE @a INT = 1, @b NVARCHAR(10) = N'x', @c TABLE (Id INT);
+SET @a += 1;
+SELECT @a = MAX(Id) FROM t;
+SELECT @@ROWCOUNT, @@IDENTITY;
+
+[expect]
+DECLARE @a INT = 1, @b NVARCHAR(10) = N'x', @c TABLE (Id INT);
+SET @a += 1;
+SELECT @a = MAX(Id)
+FROM t;
+SELECT @@ROWCOUNT, @@IDENTITY;
+
+== should format a long declare ==
+DECLARE @FirstVariable INT = 1, @SecondVariable NVARCHAR(100) = N'second', @ThirdVariable DATETIME2 = SYSDATETIME(), @Fourth INT;
+
+[expect]
+DECLARE
+  @FirstVariable INT = 1,
+  @SecondVariable NVARCHAR(100) = N'second',
+  @ThirdVariable DATETIME2 = SYSDATETIME(),
+  @Fourth INT;
+
+== should format top and output ==
+UPDATE TOP (10) t SET a = 1 OUTPUT inserted.Id, deleted.a WHERE b = 2;
+
+[expect]
+UPDATE TOP (10) t
+SET a = 1
+OUTPUT inserted.Id, deleted.a
+WHERE b = 2;
+
+== should format table hints ==
+SELECT * FROM t WITH (NOLOCK) INNER JOIN u WITH (INDEX(ix), NOLOCK) ON u.Id = t.Id OPTION (RECOMPILE, MAXDOP 1);
+
+[expect]
+SELECT *
+FROM t WITH (NOLOCK)
+  INNER JOIN u WITH (INDEX(ix), NOLOCK) ON u.Id = t.Id
+OPTION (RECOMPILE, MAXDOP 1);
+
+== should format apply ==
+SELECT * FROM t CROSS APPLY OPENJSON(t.Data) WITH (Id INT '$.id') AS j;
+
+[expect]
+SELECT *
+FROM t
+  CROSS APPLY OPENJSON(t.Data) WITH (Id INT '$.id') AS j;
+
+== should format xml methods ==
+SELECT x.value('(/a/b)[1]', 'INT') FROM @xml.nodes('/a') AS t(x);
+
+[expect]
+SELECT x.value('(/a/b)[1]', 'INT')
+FROM @xml.nodes('/a') AS t(x);
+
+== should format money and unicode literals ==
+SELECT $1.50, N'unicode', 0x0F;
+
+[expect]
+SELECT $1.50, N'unicode', 0x0F;
+
+== should format the merge output action ==
+MERGE t USING s ON t.Id = s.Id WHEN MATCHED THEN UPDATE SET t.a = s.a OUTPUT $action;
+
+[expect]
+MERGE t
+USING s
+ON t.Id = s.Id
+WHEN MATCHED THEN
+  UPDATE SET t.a = s.a
+OUTPUT $action;
+
+== should format pivot ==
+SELECT * FROM (SELECT a, b, c FROM t) AS src PIVOT (SUM(c) FOR b IN ([x], [y])) AS p;
+
+[expect]
+SELECT *
+FROM (SELECT a, b, c FROM t) AS src PIVOT (SUM(c) FOR b IN ([x], [y])) AS p;
+
+== should format for xml ==
+SELECT a FROM t FOR XML PATH('row'), ROOT('rows');
+
+[expect]
+SELECT a
+FROM t
+FOR XML PATH('row'), ROOT('rows');
+
+== should format temporal queries ==
+SELECT * FROM t FOR SYSTEM_TIME AS OF '2020-01-01' WHERE a = 1;
+
+[expect]
+SELECT *
+FROM t FOR SYSTEM_TIME AS OF '2020-01-01'
+WHERE a = 1;
+
+== should end an operator before a sign ==
+SELECT * FROM t WHERE x!=-1 AND y%-2=0 AND z|-1=0;
+
+[expect]
+SELECT *
+FROM t
+WHERE x != -1 AND y % -2 = 0 AND z | -1 = 0;
+
+== should keep a column named like a clause in a list ==
+SELECT id, offset, filter, identity FROM t;
+
+[expect]
+SELECT id, offset, filter, identity
+FROM t;

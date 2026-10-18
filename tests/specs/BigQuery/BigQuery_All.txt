@@ -1,0 +1,149 @@
+~~ dialect: bigquery ~~
+== should format backtick paths ==
+SELECT * FROM `project.dataset.table` WHERE _PARTITIONTIME > TIMESTAMP '2020-01-01';
+
+[expect]
+SELECT *
+FROM `project.dataset.table`
+WHERE _PARTITIONTIME > TIMESTAMP '2020-01-01';
+
+== should format except and replace ==
+SELECT * EXCEPT (a, b) REPLACE (c * 2 AS c) FROM t;
+
+[expect]
+SELECT * EXCEPT (a, b) REPLACE (c * 2 AS c)
+FROM t;
+
+== should format structs and arrays ==
+SELECT STRUCT(1 AS a, 'x' AS b), [1, 2, 3], ARRAY<INT64>[1, 2], t.s.field FROM t, UNNEST(t.items) AS item;
+
+[expect]
+SELECT STRUCT(1 AS a, 'x' AS b), [1, 2, 3], ARRAY<INT64>[1, 2], t.s.field
+FROM t, UNNEST(t.items) AS item;
+
+== should format raw and triple quoted strings ==
+SELECT r'\d+', b'bytes', '''multi
+line''', """also
+multi""";
+
+[expect]
+SELECT r'\d+', b'bytes', '''multi
+line''', """also
+multi""";
+
+== should format hash comments ==
+# a comment
+SELECT 1; # after
+
+[expect]
+# a comment
+SELECT 1; # after
+
+== should format scripting ==
+DECLARE x INT64 DEFAULT 0;
+DECLARE y STRING;
+SET x = x + 1;
+IF x > 0 THEN SELECT 'positive'; ELSEIF x < 0 THEN SELECT 'negative'; ELSE SELECT 'zero'; END IF;
+LOOP SET x = x + 1; IF x > 10 THEN BREAK; END IF; END LOOP;
+WHILE x > 0 DO SET x = x - 1; END WHILE;
+FOR row IN (SELECT 1 AS n) DO SELECT row.n; END FOR;
+
+[expect]
+DECLARE x INT64 DEFAULT 0;
+DECLARE y STRING;
+SET x = x + 1;
+IF x > 0 THEN
+  SELECT 'positive';
+ELSEIF x < 0 THEN
+  SELECT 'negative';
+ELSE
+  SELECT 'zero';
+END IF;
+LOOP
+  SET x = x + 1;
+  IF x > 10 THEN
+    BREAK;
+  END IF;
+END LOOP;
+WHILE x > 0 DO
+  SET x = x - 1;
+END WHILE;
+FOR row IN (SELECT 1 AS n) DO
+  SELECT row.n;
+END FOR;
+
+== should format blocks with exception handlers ==
+BEGIN
+SELECT 1 / 0;
+EXCEPTION WHEN ERROR THEN
+SELECT @@error.message;
+END;
+
+[expect]
+BEGIN
+  SELECT 1 / 0;
+EXCEPTION
+  WHEN ERROR THEN
+    SELECT @@error.message;
+END;
+
+== should format a procedure ==
+CREATE OR REPLACE PROCEDURE dataset.p(x INT64, OUT y INT64)
+BEGIN
+SET y = x * 2;
+END;
+
+[expect]
+CREATE OR REPLACE PROCEDURE dataset.p(x INT64, OUT y INT64)
+BEGIN
+  SET y = x * 2;
+END;
+
+== should format call ==
+CALL dataset.p(1, y);
+
+[expect]
+CALL dataset.p(1, y);
+
+== should format qualify and window ==
+SELECT a, ROW_NUMBER() OVER (PARTITION BY b ORDER BY c) AS rn FROM t WHERE TRUE QUALIFY rn = 1;
+
+[expect]
+SELECT a, ROW_NUMBER() OVER (PARTITION BY b ORDER BY c) AS rn
+FROM t
+WHERE TRUE
+QUALIFY rn = 1;
+
+== should format query parameters ==
+SELECT * FROM t WHERE a = @a AND b = @@project_id;
+
+[expect]
+SELECT *
+FROM t
+WHERE a = @a AND b = @@project_id;
+
+== should end a variable's name at a comment ==
+SELECT * FROM t WHERE x = @v# note
+  AND y = 1;
+
+[expect]
+SELECT *
+FROM t
+WHERE x = @v # note
+  AND y = 1;
+
+== should keep the dashes of a project's name ==
+SELECT * FROM   my-project.dataset.tbl t JOIN dataset.my-table u USING (id) WHERE a-b > 1;
+
+[expect]
+SELECT *
+FROM my-project.dataset.tbl t
+  JOIN dataset.my-table u USING (id)
+WHERE a - b > 1;
+
+== should end a raw string and a quoted name after an escaped quote ==
+SELECT r'\'' AS a, `a\`b` FROM t;
+
+[expect]
+SELECT r'\'' AS a, `a\`b`
+FROM t;

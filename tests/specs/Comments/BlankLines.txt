@@ -1,0 +1,71 @@
+== should keep a blank line between statements ==
+SELECT 1;
+
+SELECT 2;
+SELECT 3;
+
+[expect]
+SELECT 1;
+
+SELECT 2;
+SELECT 3;
+
+== should collapse several blank lines into one ==
+SELECT 1;
+
+
+
+SELECT 2;
+
+[expect]
+SELECT 1;
+
+SELECT 2;
+
+== should remove blank lines at the start and end of the file ==
+
+
+SELECT 1;
+
+[expect]
+SELECT 1;
+
+== should remove blank lines within a statement ==
+SELECT a,
+
+b
+
+FROM t
+
+WHERE c = 1;
+
+[expect]
+SELECT a, b
+FROM t
+WHERE c = 1;
+
+== should keep blank lines between statements in a block ==
+BEGIN
+SELECT 1;
+
+SELECT 2;
+END;
+
+[expect]
+BEGIN
+  SELECT 1;
+
+  SELECT 2;
+END;
+
+== should keep a blank line before a comment ==
+SELECT 1;
+
+-- about the next one
+SELECT 2;
+
+[expect]
+SELECT 1;
+
+-- about the next one
+SELECT 2;

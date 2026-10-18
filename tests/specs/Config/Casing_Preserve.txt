@@ -1,0 +1,8 @@
+== should preserve casing by default ==
+SELECT a FROM t where b = 1 Order By a;
+
+[expect]
+SELECT a
+FROM t
+where b = 1
+Order By a;

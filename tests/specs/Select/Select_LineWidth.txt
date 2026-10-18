@@ -1,0 +1,175 @@
+~~ lineWidth: 40 ~~
+== should break a select list that doesn't fit ==
+SELECT first_name, last_name, email, phone FROM users;
+
+[expect]
+SELECT
+  first_name,
+  last_name,
+  email,
+  phone
+FROM users;
+
+== should keep a select list that fits ==
+SELECT id, name FROM users;
+
+[expect]
+SELECT id, name
+FROM users;
+
+== should break where conditions that don't fit ==
+SELECT * FROM t WHERE first_condition = 1 AND second_condition = 2 OR third = 3;
+
+[expect]
+SELECT *
+FROM t
+WHERE first_condition = 1
+  AND second_condition = 2
+  OR third = 3;
+
+== should not split the and of a between ==
+SELECT * FROM t WHERE created_at BETWEEN start_date AND end_date AND deleted = 0;
+
+[expect]
+SELECT *
+FROM t
+WHERE created_at BETWEEN start_date AND end_date
+  AND deleted = 0;
+
+== should break a join's condition that doesn't fit ==
+SELECT * FROM a JOIN b ON b.a_id = a.id AND b.kind = 'x' AND b.flag = TRUE;
+
+[expect]
+SELECT *
+FROM a
+  JOIN b
+    ON b.a_id = a.id
+    AND b.kind = 'x'
+    AND b.flag = TRUE;
+
+== should break function arguments that don't fit ==
+SELECT coalesce(first_value, second_value, third_value) FROM t;
+
+[expect]
+SELECT coalesce(
+  first_value,
+  second_value,
+  third_value
+)
+FROM t;
+
+== should break an in list that doesn't fit ==
+SELECT * FROM t WHERE id IN (1000, 2000, 3000, 4000, 5000, 6000);
+
+[expect]
+SELECT *
+FROM t
+WHERE id IN (
+  1000,
+  2000,
+  3000,
+  4000,
+  5000,
+  6000
+);
+
+== should break a subquery that doesn't fit ==
+SELECT * FROM t WHERE id IN (SELECT id FROM other WHERE active = 1);
+
+[expect]
+SELECT *
+FROM t
+WHERE id IN (
+  SELECT id
+  FROM other
+  WHERE active = 1
+);
+
+== should keep a lone subquery against its keyword ==
+SELECT * FROM (SELECT id, name FROM users WHERE active = 1) AS u;
+
+[expect]
+SELECT *
+FROM (
+  SELECT id, name
+  FROM users
+  WHERE active = 1
+) AS u;
+
+== should break a case that doesn't fit ==
+SELECT CASE WHEN a = 1 THEN 'one' WHEN a = 2 THEN 'two' END AS n, b FROM t;
+
+[expect]
+SELECT
+  CASE
+    WHEN a = 1 THEN 'one'
+    WHEN a = 2 THEN 'two'
+  END AS n,
+  b
+FROM t;
+
+== should break values rows that don't fit ==
+INSERT INTO t (a, b) VALUES (1, 'one'), (2, 'two'), (3, 'three');
+
+[expect]
+INSERT INTO t (a, b)
+VALUES
+  (1, 'one'),
+  (2, 'two'),
+  (3, 'three');
+
+== should break group by and order by lists ==
+SELECT a, b, c FROM t GROUP BY first_column, second_column ORDER BY first_column, second_column;
+
+[expect]
+SELECT a, b, c
+FROM t
+GROUP BY first_column, second_column
+ORDER BY first_column, second_column;
+
+== should break nested groups from the outside in ==
+SELECT outer_function(inner_function(first_argument, second_argument), other) FROM t;
+
+[expect]
+SELECT outer_function(
+  inner_function(
+    first_argument,
+    second_argument
+  ),
+  other
+)
+FROM t;
+
+== should break a window that doesn't fit ==
+SELECT row_number() OVER (PARTITION BY department ORDER BY salary DESC) AS rank FROM employees;
+
+[expect]
+SELECT row_number() OVER (
+  PARTITION BY department
+  ORDER BY salary DESC
+) AS rank
+FROM employees;
+
+== should break conditions in brackets ==
+SELECT * FROM t WHERE (first_condition = 1 OR second_condition = 2) AND x = 1;
+
+[expect]
+SELECT *
+FROM t
+WHERE (
+  first_condition = 1
+  OR second_condition = 2
+)
+  AND x = 1;
+
+== should break a long cte ==
+WITH active_users AS (SELECT id, name FROM users WHERE active = 1) SELECT * FROM active_users;
+
+[expect]
+WITH active_users AS (
+  SELECT id, name
+  FROM users
+  WHERE active = 1
+)
+SELECT *
+FROM active_users;

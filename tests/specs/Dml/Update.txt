@@ -1,0 +1,82 @@
+== should format an update ==
+update dbo.Test Set test=1
+
+[expect]
+update dbo.Test
+Set test = 1
+
+== should format an update with a where ==
+UPDATE t SET a = 1, b = 2 WHERE id = 3;
+
+[expect]
+UPDATE t
+SET a = 1, b = 2
+WHERE id = 3;
+
+== should format an update from another table ==
+UPDATE t SET a = u.a FROM u WHERE u.id = t.id;
+
+[expect]
+UPDATE t
+SET a = u.a
+FROM u
+WHERE u.id = t.id;
+
+== should format an update with a join ==
+UPDATE t INNER JOIN u ON u.id = t.id SET t.a = u.a WHERE u.b = 1;
+
+[expect]
+UPDATE t INNER JOIN u ON u.id = t.id
+SET t.a = u.a
+WHERE u.b = 1;
+
+== should format a t-sql update from a join ==
+UPDATE t SET a = u.a FROM t INNER JOIN u ON u.id = t.id WHERE u.b = 1;
+
+[expect]
+UPDATE t
+SET a = u.a
+FROM t
+  INNER JOIN u ON u.id = t.id
+WHERE u.b = 1;
+
+== should format returning ==
+UPDATE t SET a = a + 1 WHERE id = 1 RETURNING a;
+
+[expect]
+UPDATE t
+SET a = a + 1
+WHERE id = 1
+RETURNING a;
+
+== should format setting several columns at once ==
+UPDATE t SET (a, b) = (SELECT a, b FROM u WHERE u.id = t.id);
+
+[expect]
+UPDATE t
+SET (a, b) = (SELECT a, b FROM u WHERE u.id = t.id);
+
+== should format order by and limit ==
+UPDATE t SET a = 1 ORDER BY id LIMIT 10;
+
+[expect]
+UPDATE t
+SET a = 1
+ORDER BY id
+LIMIT 10;
+
+== should format where current of ==
+UPDATE t SET a = 1 WHERE CURRENT OF c;
+
+[expect]
+UPDATE t
+SET a = 1
+WHERE CURRENT OF c;
+
+== should format a long set list ==
+UPDATE customers SET first_name = 'First', last_name = 'Last', email_address = 'first@example.com', updated_at = now() WHERE id = 1;
+
+[expect]
+UPDATE customers
+SET first_name = 'First', last_name = 'Last', email_address = 'first@example.com', updated_at = now()
+WHERE id = 1;

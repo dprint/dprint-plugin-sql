@@ -1,0 +1,233 @@
+== should keep comments between statements ==
+-- first
+SELECT 1;
+/* second */
+SELECT 2;
+
+[expect]
+-- first
+SELECT 1;
+/* second */
+SELECT 2;
+
+== should keep a comment after a statement on its line ==
+SELECT 1; -- one
+SELECT 2; /* two */
+SELECT 3; /* three */ -- and more
+
+[expect]
+SELECT 1; -- one
+SELECT 2; /* two */
+SELECT 3; /* three */ -- and more
+
+== should keep comments after list items ==
+SELECT a, -- the a
+b -- the b
+FROM t;
+
+[expect]
+SELECT
+  a, -- the a
+  b -- the b
+FROM t;
+
+== should move a comment before a comma after it ==
+SELECT a -- the a
+, b
+FROM t;
+
+[expect]
+SELECT
+  a, -- the a
+  b
+FROM t;
+
+== should keep comments on lines of their own within a list ==
+SELECT a,
+-- before b
+b
+FROM t;
+
+[expect]
+SELECT
+  a,
+  -- before b
+  b
+FROM t;
+
+== should keep a comment after a keyword on its line ==
+SELECT -- the columns
+a, b
+FROM t;
+
+[expect]
+SELECT -- the columns
+  a,
+  b
+FROM t;
+
+== should keep a comment before a clause ==
+SELECT a FROM t
+-- only some
+WHERE b = 1;
+
+[expect]
+SELECT a
+FROM t
+-- only some
+WHERE b = 1;
+
+== should keep comments within conditions ==
+SELECT * FROM t WHERE a = 1 -- first
+-- second
+AND b = 2;
+
+[expect]
+SELECT *
+FROM t
+WHERE a = 1 -- first
+  -- second
+  AND b = 2;
+
+== should keep comments within brackets ==
+SELECT f(a, -- first argument
+b) FROM t;
+
+[expect]
+SELECT f(
+  a, -- first argument
+  b
+)
+FROM t;
+
+== should keep block comments in place ==
+SELECT /* all */ * FROM t /* the table */ WHERE /* a */ a = 1;
+
+[expect]
+SELECT /* all */ *
+FROM t /* the table */
+WHERE /* a */ a = 1;
+
+== should keep a block comment before a comma ==
+SELECT f(a /* x */, b, /* y */ c) FROM t;
+
+[expect]
+SELECT f(a /* x */, b, /* y */ c)
+FROM t;
+
+== should keep multi-line block comments as they are ==
+/*
+ * a header
+ */
+SELECT 1;
+
+[expect]
+/*
+ * a header
+ */
+SELECT 1;
+
+== should keep comments within a case ==
+SELECT CASE -- by kind
+WHEN a THEN 1 -- one
+-- before two
+WHEN b THEN 2
+ELSE 3 -- otherwise
+END FROM t;
+
+[expect]
+SELECT
+  CASE -- by kind
+    WHEN a THEN 1 -- one
+    -- before two
+    WHEN b THEN 2
+    ELSE 3 -- otherwise
+  END
+FROM t;
+
+== should keep comments before joins ==
+SELECT * FROM a -- a
+-- join b
+JOIN b ON a.id = b.id -- on
+-- join c
+LEFT JOIN c ON c.id = b.id;
+
+[expect]
+SELECT *
+FROM a -- a
+  -- join b
+  JOIN b ON a.id = b.id -- on
+  -- join c
+  LEFT JOIN c ON c.id = b.id;
+
+== should keep a comment in brackets that hold nothing else ==
+SELECT f(
+-- nothing
+);
+
+[expect]
+SELECT f(
+  -- nothing
+);
+
+== should keep a comment before a semicolon ==
+SELECT 1 -- the end
+;
+
+[expect]
+SELECT 1 -- the end
+;
+
+== should keep comments in a create table ==
+CREATE TABLE t (
+-- the id
+id INT, -- primary
+name TEXT -- the name
+);
+
+[expect]
+CREATE TABLE t (
+  -- the id
+  id INT, -- primary
+  name TEXT -- the name
+);
+
+== should keep a comment at the end of the file ==
+SELECT 1;
+-- the end
+
+[expect]
+SELECT 1;
+-- the end
+
+== should keep a file of comments ==
+-- one
+-- two
+
+/* three */
+
+[expect]
+-- one
+-- two
+
+/* three */
+
+== should indent a clause beneath a comment on its own line after the keyword ==
+select a from t where
+/* c */
+x = 1 and y = 2
+group by a having
+-- why
+count(*) > 1;
+
+[expect]
+select a
+from t
+where
+  /* c */
+  x = 1
+    and y = 2
+group by a
+having
+  -- why
+  count(*) > 1;
