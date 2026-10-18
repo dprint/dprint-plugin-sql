@@ -9,6 +9,7 @@ SQL formatting plugin for dprint, with its own lexer, parser and formatter that 
 - `cargo clippy --all-targets --all-features -- -D warnings` — lint
 - `cargo build --target wasm32-unknown-unknown --features wasm --release` — build the wasm plugin
 - `cd deployment/npm && node setup.js && npm test` — test the npm package (requires wasm build first)
+- `deno run -A scripts/corpus.ts` — format the SQL files of real projects to find bugs (see [Corpus](#corpus))
 
 ## Architecture
 
@@ -26,6 +27,7 @@ The pipeline is lex → parse → generate IR → print → verify.
 - `deployment/npm/` — npm package that ships `plugin.wasm`
 - `deployment/schema.json` — JSON schema for plugin configuration
 - `scripts/generateReleaseNotes.ts` — generates changelog for GitHub releases
+- `scripts/corpus.ts` and `examples/corpus.rs` — the corpus of real projects' SQL files and its runner
 
 ## Principles
 
@@ -52,6 +54,17 @@ Spec files live in `tests/specs/` and use the dprint-development format:
 - Each config variation needs its own file since config is file-level, which is why each dialect has its own directory
 - `[|` and `|]` mark the range to format in a spec's text
 - A spec file can't start with a SQL comment, since a first line starting with `--` names the spec's file
+
+## Corpus
+
+`deno run -A scripts/corpus.ts` fetches the `.sql` files of the projects pinned in `scripts/corpus.ts` into `.corpus/`, and formats each in its own dialect. It reports any file that panics, is refused (formatting would have changed more than whitespace), is unstable or times out, and exits with an error if any do. It also lists slow files. Files that don't parse in their dialect aren't problems, and `--verbose` lists them.
+
+- `--all-dialects` formats every file in every dialect, which finds the bugs only a dialect a file isn't written in shows
+- `--line-width 30,120` formats at several widths, since a narrow width breaks far more
+- `--compare main` also formats with the formatter at a git ref and writes the differences in output to `.corpus/compare.diff`, to review how a change formats real code
+- project names (ex. `pgtap sakila`) limit it to those projects
+
+It isn't run in CI. Run it after changing the lexer, parser or layout, and before a release. When it finds a bug, add a spec reproducing it along with the fix. To add a project, add it to the list with a pinned commit and the dialect of its files.
 
 ## Releases
 
