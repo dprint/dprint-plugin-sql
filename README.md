@@ -46,6 +46,8 @@ To add configuration, specify a `"sql"` key in your dprint.json:
 | `linesBetweenQueries` | `1`        | The minimum number of line breaks between statements at the top level of the file.                                                  |
 | `joinsAsTopLevel`     | `false`    | Whether to write joins at the indentation of `FROM` rather than indented beneath it.                                                |
 
+The `uppercase` option of earlier versions is still accepted: `uppercase: true` is the same as `casing: upper`.
+
 ### Dialects
 
 The dialect decides how the text is split into tokens, which is where the dialects disagree: whether `#` starts a comment (MySQL, BigQuery), names a temporary table (SQL Server) or is an operator (PostgreSQL), whether a backslash escapes a quote in a string (MySQL, BigQuery, Snowflake), whether `[name]` is a quoted identifier (SQL Server, SQLite), and so on.

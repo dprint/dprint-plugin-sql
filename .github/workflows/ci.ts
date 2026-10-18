@@ -63,6 +63,9 @@ const buildJob = job("build", {
     },
 
     { name: "Test debug", if: isDebug, run: "cargo test" },
+    { name: "Test tracing", if: isDebug, run: "cargo test --features tracing" },
+    { name: "Clippy", if: isDebug, run: "cargo clippy --all-targets -- -D warnings" },
+    { name: "Check formatting", if: isDebug, run: "cargo fmt --check" },
     { name: "Test release", if: isRelease, run: "cargo test --release" },
 
     getTagVersion,

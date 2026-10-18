@@ -104,7 +104,8 @@
     "linesBetweenQueries": {
       "description": "The minimum number of line breaks between statements at the top level of the file. A blank line between statements is kept regardless.",
       "default": 1,
-      "type": "number"
+      "type": "integer",
+      "minimum": 1
     },
     "joinsAsTopLevel": {
       "description": "Whether to write joins at the indentation of the FROM keyword rather than indented beneath it.",

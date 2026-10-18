@@ -27,6 +27,7 @@ generate_str_to_from![
 /// comment or quote an identifier, whether a backslash escapes a quote, and so on.
 #[derive(Clone, PartialEq, Eq, Debug, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[non_exhaustive]
 pub enum Dialect {
   /// Accepts the syntax of all of the dialects where they don't conflict.
   Generic,

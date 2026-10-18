@@ -16,6 +16,7 @@ impl ParseError {
 
 /// An error that can occur while formatting a SQL file.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum FormatError {
   /// The input could not be parsed as SQL.
   #[error(transparent)]

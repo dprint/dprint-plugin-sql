@@ -45,6 +45,15 @@ jobs:
       - name: Test debug
         if: matrix.config.kind == 'test_debug'
         run: cargo test
+      - name: Test tracing
+        if: matrix.config.kind == 'test_debug'
+        run: cargo test --features tracing
+      - name: Clippy
+        if: matrix.config.kind == 'test_debug'
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Check formatting
+        if: matrix.config.kind == 'test_debug'
+        run: cargo fmt --check
       - name: Test release
         if: matrix.config.kind == 'test_release'
         run: cargo test --release

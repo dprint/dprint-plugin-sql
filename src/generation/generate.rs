@@ -8,7 +8,6 @@ use dprint_core::formatting::ir_helpers::LinesSpan;
 use dprint_core::formatting::ir_helpers::MultiLineOptions;
 use dprint_core::formatting::ir_helpers::SingleLineOptions;
 use dprint_core::formatting::*;
-use dprint_core_macros::sc;
 
 use super::Context;
 use crate::ast::*;
@@ -1460,7 +1459,7 @@ fn gen_list_item(item: &ListItem, context: &mut Context) -> PrintItems {
   ));
   items.extend(gen_fill(item.elements, context));
   if item.comma.is_some() {
-    items.push_sc(sc!(","));
+    items.push_str(",");
   }
   for comment in &item.trailing_comments {
     items.extend(gen_trailing_comment(comment));
