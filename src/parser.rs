@@ -344,6 +344,11 @@ impl<'a> Parser<'a> {
       if state.query_started {
         return true;
       }
+      // a T-SQL `RETURN` that returns nothing (ex. `IF @x IS NULL RETURN`), unlike the one of
+      // `AS RETURN SELECT ..`
+      if head_is(&["RETURN"]) && prev_is(&["RETURN"]) && token.starts_line() {
+        return true;
+      }
       if prev_is(&[
         "AS", "FOR", "IN", "QUERY", "EXPLAIN", "ANALYZE", "VERBOSE", "IS", "RETURN",
       ]) {
@@ -363,26 +368,30 @@ impl<'a> Parser<'a> {
       ]) {
         return false;
       }
-      if head_is(&["CREATE", "ALTER"]) {
+      // the body of a trigger without a `BEGIN` (ex. `FOR EACH ROW INSERT ..`)
+      if head_is(&["CREATE", "ALTER"]) && state.routine {
         return false;
       }
       return !(head_is(&["WITH"]) && state.main_dml.is_none());
     }
     if is("SET") {
-      if head_is(&[
-        "UPDATE", "MERGE", "ALTER", "CREATE", "INSERT", "REPLACE", "GRANT", "REVOKE", "WITH",
-      ]) || state.handler
-      {
+      if head_is(&["ALTER", "CREATE", "REPLACE", "GRANT", "REVOKE"]) || state.handler {
         return false;
       }
-      if state.main_dml.is_some_and(|dml| {
-        ["UPDATE", "MERGE", "INSERT"]
-          .iter()
-          .any(|w| w.eq_ignore_ascii_case(dml))
-      }) {
+      if prev_is(&["CHARACTER", "CHAR", "DELETE", "UPDATE", "NULL", "DEFAULT"]) {
         return false;
       }
-      return !prev_is(&["CHARACTER", "CHAR", "DELETE", "UPDATE", "NULL", "DEFAULT"]);
+      // an `UPDATE` has one `SET`, a `MERGE` has one after each of its `UPDATE`s, and a MySQL
+      // `INSERT INTO t SET a = 1` has one before any values, so a `SET` after them starts the
+      // next statement (ex. `UPDATE t SET a = 1 SET @done = 1`)
+      let dml_is = |word: &str| state.main_dml.is_some_and(|dml| dml.eq_ignore_ascii_case(word));
+      if dml_is("UPDATE") {
+        return state.update_set_seen;
+      }
+      if dml_is("INSERT") {
+        return state.query_started;
+      }
+      return !(head_is(&["WITH"]) && state.main_dml.is_none());
     }
     if is("EXEC") || is("EXECUTE") {
       if prev_is(&["WITH", "GRANT", "REVOKE", "DENY", "AS"]) || head_is(&["CREATE", "ALTER"]) {
@@ -473,7 +482,10 @@ impl<'a> Parser<'a> {
     match next(0) {
       Some(token) if token.is_word("RECURSIVE") => true,
       Some(token) if matches!(token.kind, TokenKind::Word | TokenKind::QuotedIdent) => match next(1) {
-        Some(token) if token.is_word("AS") => true,
+        // not an option of a view or a routine (ex. `WITH SCHEMABINDING AS SELECT ..`)
+        Some(token) if token.is_word("AS") => next(2).is_some_and(|token| {
+          token.kind == TokenKind::OpenParen || token.is_word("MATERIALIZED") || token.is_word("NOT")
+        }),
         // `WITH name (columns) AS (`
         Some(token) if token.kind == TokenKind::OpenParen => {
           let mut depth = 0;
@@ -1101,11 +1113,12 @@ impl<'a> Parser<'a> {
       TokenKind::OpenParen | TokenKind::OpenBracket | TokenKind::OpenBrace => {
         Ok(Element::Group(Box::new(self.parse_group()?)))
       }
-      TokenKind::Word if token.is_word("CASE") => {
+      TokenKind::Word if token.is_word("CASE") && !self.failed_constructs.contains(&self.pos) => {
         let start = self.pos;
         match self.parse_case()? {
           Some(case) => Ok(Element::Case(Box::new(case))),
           None => {
+            self.failed_constructs.insert(start);
             self.pos = start + 1;
             Ok(Element::Token(token))
           }
@@ -1375,6 +1388,10 @@ struct StatementState<'a> {
   declarations: bool,
   /// Whether the last element was a declaration section, which a block follows.
   after_declarations: bool,
+  /// Whether the kind of object a `CREATE` or `ALTER` is of has been seen.
+  object_kind_seen: bool,
+  /// Whether the `SET` of an `UPDATE` has been seen.
+  update_set_seen: bool,
 }
 
 impl<'a> StatementState<'a> {
@@ -1411,19 +1428,23 @@ impl<'a> StatementState<'a> {
     let head_is_create = self
       .head
       .is_some_and(|head| head.eq_ignore_ascii_case("CREATE") || head.eq_ignore_ascii_case("ALTER"));
+    // the kind is the first word naming one (ex. not the `event` of `CREATE VIEW v AS SELECT event`)
     if head_is_create
       && self.word_count <= 8
-      && ["PROCEDURE", "PROC", "FUNCTION", "TRIGGER", "PACKAGE", "BODY", "EVENT"]
-        .iter()
-        .any(|kind| token.is_word(kind))
+      && !self.object_kind_seen
+      && let Some(is_routine) = keywords::object_kind_is_routine(word)
     {
-      self.routine = true;
+      self.object_kind_seen = true;
+      self.routine |= is_routine;
     }
     if token.is_word("HANDLER") {
       self.handler = true;
     }
     if token.is_word("SELECT") || token.is_word("VALUES") {
       self.query_started = true;
+    }
+    if token.is_word("SET") && self.main_dml.is_some_and(|dml| dml.eq_ignore_ascii_case("UPDATE")) {
+      self.update_set_seen = true;
     }
     if self.main_dml.is_none()
       && ["SELECT", "INSERT", "UPDATE", "DELETE", "MERGE"]

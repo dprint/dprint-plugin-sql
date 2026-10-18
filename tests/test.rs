@@ -122,6 +122,35 @@ end$$ language plpgsql stable;
 }
 
 #[test]
+fn should_quickly_format_deeply_nested_code() {
+  let config = ConfigurationBuilder::new().build();
+  let texts = [
+    // each `CASE` that doesn't end was once parsed again for every one around it
+    format!(
+      "SELECT {}1{} FROM t;\n",
+      "CASE WHEN a THEN (".repeat(40),
+      ")".repeat(40)
+    ),
+    // and the printer's work to fit nested values on lines grew exponentially with their depth
+    format!(
+      "SELECT {}1{} FROM t;\n",
+      "CASE WHEN a THEN ".repeat(40),
+      " END".repeat(40)
+    ),
+    format!(
+      "SELECT {}(1){};\n",
+      "(SELECT a FROM t WHERE b IN ".repeat(40),
+      ")".repeat(40)
+    ),
+  ];
+  for text in texts {
+    let start = std::time::Instant::now();
+    let _ = format_text(&PathBuf::from("file.sql"), &text, &config);
+    assert!(start.elapsed().as_secs() < 5, "took {:?} for:\n{text}", start.elapsed());
+  }
+}
+
+#[test]
 fn should_report_parse_errors() {
   let cases = [
     (Dialect::Generic, "SELECT 'unterminated\n", "unterminated string"),

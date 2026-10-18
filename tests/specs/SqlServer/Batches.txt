@@ -129,3 +129,15 @@ GO
 USE [$(DatabaseName)];
 :r .\other.sql
 GO
+
+== should split statements without semicolons after a create table ==
+CREATE TABLE #t (a INT)
+INSERT INTO #t VALUES (1)
+UPDATE #t SET a = 2
+
+[expect]
+CREATE TABLE #t (a INT)
+INSERT INTO #t
+VALUES (1)
+UPDATE #t
+SET a = 2

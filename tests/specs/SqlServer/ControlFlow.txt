@@ -170,3 +170,37 @@ BEGIN
 END
 CLOSE c;
 DEALLOCATE c;
+
+== should end an update at the next set ==
+IF @rc = 0 UPDATE t SET b = 1
+SET @done = 1
+UPDATE t SET a = 1 WHERE id = 2 SET @rc = @@ROWCOUNT
+MERGE t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE SET a = 1
+SET @x = 1
+
+[expect]
+IF @rc = 0
+  UPDATE t
+  SET b = 1
+SET @done = 1
+UPDATE t
+SET a = 1
+WHERE id = 2
+SET @rc = @@ROWCOUNT
+MERGE t
+USING s
+ON t.id = s.id
+WHEN MATCHED THEN
+  UPDATE SET a = 1
+SET @x = 1
+
+== should end a return without a value at the end of its line ==
+IF @x IS NULL
+ RETURN
+SELECT * FROM t
+
+[expect]
+IF @x IS NULL
+  RETURN
+SELECT *
+FROM t

@@ -5,6 +5,24 @@
 
 use std::cmp::Ordering;
 
+/// For a word naming a kind of object that a `CREATE` or `ALTER` may be of, whether it's a routine
+/// (a procedure, function, trigger, package or event), whose body is code. `None` when it names no
+/// kind, or one that may come before the kind (ex. the `TYPE` of `CREATE TYPE BODY`).
+pub fn object_kind_is_routine(word: &str) -> Option<bool> {
+  if !contains(OBJECT_KINDS, word)
+    || ["AGGREGATE", "CONSTRAINT", "TYPE"]
+      .iter()
+      .any(|w| word.eq_ignore_ascii_case(w))
+  {
+    return None;
+  }
+  Some(
+    ["PROCEDURE", "PROC", "FUNCTION", "TRIGGER", "PACKAGE", "BODY", "EVENT"]
+      .iter()
+      .any(|kind| word.eq_ignore_ascii_case(kind)),
+  )
+}
+
 /// Whether `word` is in `sorted_words`, ignoring case.
 pub fn contains(sorted_words: &[&str], word: &str) -> bool {
   sorted_words

@@ -119,3 +119,24 @@ SELECT @ a, @ @b, a . b FROM t;
 [expect]
 SELECT @ a, @ @b, a.b
 FROM t;
+
+== should split statements without semicolons after a create table ==
+CREATE TABLE t (a INT)
+INSERT INTO t VALUES (1)
+DELETE FROM t
+
+[expect]
+CREATE TABLE t (a INT)
+INSERT INTO t
+VALUES (1)
+DELETE FROM t
+
+== should tell a routine from a statement naming a kind of routine ==
+create trigger tr after insert on t for each row insert into log values (1);
+create view v as select event, name from t;
+
+[expect]
+create trigger tr after insert on t for each row insert into log values (1);
+create view v as
+select event, name
+from t;

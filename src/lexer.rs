@@ -1250,7 +1250,9 @@ fn is_sqlcmd_command(line: &str) -> bool {
 fn is_sql_plus_command(first_word: &str, rest: &str) -> bool {
   // only the commands whose names are unlikely to start a line of SQL
   const COMMANDS: &[&str] = &[
-    "prompt", "rem", "remark", "spool", "whenever", "define", "undefine", "accept", "ttitle", "btitle",
+    "prompt", "rem", "remark", "spool", "whenever", "define", "undefine", "accept", "ttitle", "btitle", "show",
+    "column", "col", "desc", "describe", "conn", "connect", "var", "variable", "print", "host", "clear", "compute",
+    "pause",
   ];
   const SET_OPTIONS: &[&str] = &[
     "serveroutput",
@@ -1288,6 +1290,13 @@ fn is_sql_plus_command(first_word: &str, rest: &str) -> bool {
   if first_word.eq_ignore_ascii_case("set") {
     let option = rest.split_whitespace().next().unwrap_or("");
     return SET_OPTIONS.iter().any(|o| o.eq_ignore_ascii_case(option));
+  }
+  // `EXEC p` runs a procedure, while `EXECUTE IMMEDIATE` is only in PL/SQL
+  if first_word.eq_ignore_ascii_case("exec") || first_word.eq_ignore_ascii_case("execute") {
+    return !rest
+      .split_whitespace()
+      .next()
+      .is_some_and(|word| word.eq_ignore_ascii_case("immediate"));
   }
   COMMANDS.iter().any(|c| c.eq_ignore_ascii_case(first_word))
 }

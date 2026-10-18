@@ -3,6 +3,7 @@ use std::rc::Rc;
 use dprint_core::formatting::conditions::*;
 use dprint_core::formatting::ir_helpers;
 use dprint_core::formatting::ir_helpers::GenSeparatedValuesOptions;
+use dprint_core::formatting::ir_helpers::GenSeparatedValuesResult;
 use dprint_core::formatting::ir_helpers::GeneratedValue;
 use dprint_core::formatting::ir_helpers::LinesSpan;
 use dprint_core::formatting::ir_helpers::MultiLineOptions;
@@ -620,11 +621,13 @@ fn detect_mode(elements: &[Element]) -> Mode {
   } else if is("PARTITION") || is("ORDER") || is("ROWS") || is("RANGE") || is("GROUPS") || is("MEASURES") {
     Mode::Window
   } else if (is("CREATE") || is("ALTER"))
-    && elements.iter().filter(|e| !e.is_comment()).take(8).any(|e| {
-      ["PROCEDURE", "PROC", "FUNCTION", "TRIGGER", "PACKAGE", "BODY", "EVENT"]
-        .iter()
-        .any(|w| e.is_word(w))
-    })
+    && elements
+      .iter()
+      .filter(|e| !e.is_comment())
+      .take(8)
+      .filter_map(|e| e.as_token().filter(|t| t.kind == TokenKind::Word))
+      .find_map(|t| keywords::object_kind_is_routine(t.text))
+      == Some(true)
   {
     Mode::Routine
   } else if is("ALTER") && second.is_some_and(|e| e.is_word("TABLE")) {
@@ -1211,8 +1214,9 @@ enum ClausesLayout {
 /// Clauses that are written on one line when they fit and otherwise on a line each.
 fn gen_clauses_fit(clauses: &[Clause], force: bool, layout: ClausesLayout, context: &mut Context) -> PrintItems {
   let indent_width = context.config.indent_width;
-  ir_helpers::gen_separated_values(
-    |_| {
+  gen_nested_separated_values(
+    context,
+    |context| {
       clauses
         .iter()
         .map(|clause| GeneratedValue {
@@ -1413,8 +1417,9 @@ fn gen_list(elements: &[Element], style: ListStyle, force: bool, context: &mut C
   let has_multi_line_text_item = items.iter().any(|item| is_multi_line_text_item(item.elements));
   // nor do brackets that are the only item, which stay against what's before them (ex. `FROM (`)
   let is_lone_group = count == 1 && items[0].leading_comments.is_empty() && lone_group(items[0].elements).is_some();
-  ir_helpers::gen_separated_values(
-    |_| {
+  gen_nested_separated_values(
+    context,
+    |context| {
       let mut line = 0;
       let mut values = Vec::with_capacity(count);
       for (i, item) in items.iter().enumerate() {
@@ -1571,8 +1576,9 @@ fn gen_condition_parts(
   }
   let force = force || parts.iter().skip(1).any(|part| !part.leading_comments.is_empty());
   let indent_width = context.config.indent_width;
-  ir_helpers::gen_separated_values(
-    |_| {
+  gen_nested_separated_values(
+    context,
+    |context| {
       let mut values = Vec::with_capacity(parts.len() + 1);
       if let Some(first) = first {
         values.push(GeneratedValue::from_items(first));
@@ -1876,8 +1882,9 @@ fn gen_case(case: &Case, context: &mut Context) -> PrintItems {
   let indent_width = context.config.indent_width;
   let branch_count = case.branches.len() + usize::from(case.else_branch.is_some());
   items.extend(
-    ir_helpers::gen_separated_values(
-      |_| {
+    gen_nested_separated_values(
+      context,
+      |context| {
         let mut values = Vec::with_capacity(branch_count);
         for branch in &case.branches {
           let mut items = PrintItems::new();
@@ -2098,6 +2105,23 @@ fn is_likely_table_name(token: &Token) -> bool {
   ]
   .iter()
   .any(|w| token.is_word(w))
+}
+
+/// How deeply values separated onto lines when they don't fit on one may nest before they're
+/// always put on lines of their own, since the printer's work to fit them grows exponentially
+/// with their depth.
+const MAX_FITTED_DEPTH: u32 = 12;
+
+fn gen_nested_separated_values(
+  context: &mut Context,
+  gen_values: impl FnOnce(&mut Context) -> Vec<GeneratedValue>,
+  mut opts: GenSeparatedValuesOptions,
+) -> GenSeparatedValuesResult {
+  context.separated_values_depth += 1;
+  opts.force_use_new_lines |= context.separated_values_depth > MAX_FITTED_DEPTH;
+  let result = ir_helpers::gen_separated_values(|_| gen_values(context), opts);
+  context.separated_values_depth -= 1;
+  result
 }
 
 /// Text written exactly as it is, including the line breaks within it. The first line is

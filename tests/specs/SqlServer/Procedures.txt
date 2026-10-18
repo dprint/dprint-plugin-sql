@@ -166,3 +166,17 @@ EXEC dbo.SomeLongProcedureName
   @SecondParameter = 'second value',
   @ThirdParameter = 3,
   @Fourth = 4;
+
+== should not read an option as a common table expression ==
+CREATE VIEW v WITH SCHEMABINDING AS SELECT a FROM dbo.t
+GO
+CREATE PROCEDURE p WITH EXECUTE AS OWNER AS SELECT 1
+
+[expect]
+CREATE VIEW v WITH SCHEMABINDING AS
+SELECT a
+FROM dbo.t
+GO
+CREATE PROCEDURE p WITH EXECUTE AS OWNER
+AS
+SELECT 1
