@@ -752,8 +752,26 @@ impl ClauseScan {
   fn match_clause(&mut self, elements: &[Element], i: usize) -> Option<(ClauseKind, usize)> {
     let token = word_at(elements, i)?;
     let previous = prev_significant(elements, i);
-    // a word that's part of a qualified name, or an item of a list (ex. a column named `offset`)
-    if previous.is_some_and(|e| e.is_kind(TokenKind::Dot) || e.is_kind(TokenKind::Comma))
+    // a word that's part of a qualified name, or an item of a list (ex. a column named `offset`),
+    // though a list may end in a comma before a clause no column can be named like (ex. BigQuery's
+    // `SELECT a, b, FROM t`)
+    let after_comma = previous.is_some_and(|e| e.is_kind(TokenKind::Comma))
+      && ![
+        "FROM",
+        "WHERE",
+        "GROUP",
+        "HAVING",
+        "ORDER",
+        "UNION",
+        "INTERSECT",
+        "EXCEPT",
+        "MINUS",
+        "INTO",
+      ]
+      .iter()
+      .any(|w| token.is_word(w));
+    if after_comma
+      || previous.is_some_and(|e| e.is_kind(TokenKind::Dot))
       || elements.get(i + 1).is_some_and(|e| e.is_kind(TokenKind::Dot))
     {
       return None;
