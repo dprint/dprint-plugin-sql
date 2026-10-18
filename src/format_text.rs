@@ -203,7 +203,7 @@ fn comment_text<'a>(token: &'a Token) -> std::borrow::Cow<'a, str> {
   let text = match token.kind {
     TokenKind::LineComment | TokenKind::TemplateLine | TokenKind::Template => token.text.trim_end_matches([' ', '\t']),
     // a SQLite comment may run to the end of the file, which the formatter ends with a newline
-    TokenKind::BlockComment if !token.text.ends_with("*/") => token.text.trim_end(),
+    TokenKind::BlockComment if !token.text.ends_with("*/") => token.text.trim_end_matches(lexer::is_space),
     _ => token.text,
   };
   normalize_newlines(text)
@@ -227,7 +227,9 @@ fn token_equivalent(a: &Token, b: &Token, config: &Configuration) -> bool {
       UppercaseKind::Upper => b.text == a.text.to_ascii_uppercase(),
       UppercaseKind::Lower => b.text == a.text.to_ascii_lowercase(),
     },
-    TokenKind::Directive | TokenKind::BatchSeparator => a.text.trim_end() == b.text.trim_end(),
+    TokenKind::Directive | TokenKind::BatchSeparator => {
+      a.text.trim_end_matches(lexer::is_space) == b.text.trim_end_matches(lexer::is_space)
+    }
     TokenKind::DollarString => dollar_string_bodies_equivalent(a.text, b.text, config),
     _ => false,
   }

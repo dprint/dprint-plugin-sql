@@ -368,8 +368,9 @@ impl<'a> Parser<'a> {
       ]) {
         return false;
       }
-      // the body of a trigger without a `BEGIN` (ex. `FOR EACH ROW INSERT ..`)
-      if head_is(&["CREATE", "ALTER"]) && state.routine {
+      // the body of a trigger without a `BEGIN` (ex. `FOR EACH ROW INSERT ..`), or an action of
+      // an `ALTER` (ex. ClickHouse's `ALTER TABLE t UPDATE a = 1`)
+      if (head_is(&["CREATE"]) && state.routine) || head_is(&["ALTER"]) {
         return false;
       }
       return !(head_is(&["WITH"]) && state.main_dml.is_none());

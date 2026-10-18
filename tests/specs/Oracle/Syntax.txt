@@ -134,3 +134,16 @@ COLUMN name FORMAT a20
 DESC t
 SELECT 1
 FROM dual;
+
+== should continue a sql plus command after a dash ==
+EXECUTE dbms_stats.gather_schema_stats( -
+        'OE', -
+        cascade => TRUE);
+SELECT 1 FROM dual;
+
+[expect]
+EXECUTE dbms_stats.gather_schema_stats( -
+        'OE', -
+        cascade => TRUE);
+SELECT 1
+FROM dual;

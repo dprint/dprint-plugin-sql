@@ -18,3 +18,15 @@ INSERT INTO t (a, b) VALUES (1, 2), (3, 4);
 [expect]
 INSERT INTO t (a, b)
 VALUES (1, 2), (3, 4);
+
+== should keep the actions of an alter in it ==
+ALTER TABLE users UPDATE status = 'active', last_login = now() WHERE user_id IN (1, 2, 3);
+
+[expect]
+ALTER TABLE users
+  UPDATE status = 'active',
+  last_login = now() WHERE user_id IN (
+    1,
+    2,
+    3
+  );

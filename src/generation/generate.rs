@@ -71,7 +71,7 @@ fn gen_item(item: &Item, context: &mut Context) -> PrintItems {
   match &item.kind {
     ItemKind::Comment(token) => gen_comment(token),
     ItemKind::Command(token, comments) => {
-      let mut items = gen_raw_text(token.text.trim_end());
+      let mut items = gen_raw_text(token.text.trim_end_matches(crate::lexer::is_space));
       for comment in comments {
         items.extend(gen_trailing_comment(comment));
       }

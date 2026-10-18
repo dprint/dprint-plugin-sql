@@ -194,7 +194,7 @@ impl<'a> Lexer<'a> {
     };
     // anything after the `;` on its line is still SQL, so the data starts on the next line, but a
     // comment there can't be data
-    let rest_of_line = self.rest()[..line_end].trim();
+    let rest_of_line = self.rest()[..line_end].trim_matches(is_space);
     if !rest_of_line.is_empty() && !rest_of_line.starts_with("--") {
       return false;
     }
@@ -213,8 +213,8 @@ impl<'a> Lexer<'a> {
         .find('\n')
         .map(|i| line_start + i)
         .unwrap_or(self.text.len());
-      if self.text[line_start..line_end].trim_end() == "\\." {
-        end = line_start + self.text[line_start..line_end].trim_end().len();
+      if self.text[line_start..line_end].trim_end_matches(is_space) == "\\." {
+        end = line_start + self.text[line_start..line_end].trim_end_matches(is_space).len();
         break;
       }
       line_start = line_end + 1;
@@ -324,7 +324,7 @@ impl<'a> Lexer<'a> {
         if next.is_some_and(|c| c.is_ascii_alphabetic())
           && matches!(self.dialect, Dialect::PostgreSql | Dialect::Generic) =>
       {
-        self.pos += self.rest_of_line().trim_end().len();
+        self.pos += self.rest_of_line().trim_end_matches(is_space).len();
         Ok(TokenKind::Directive)
       }
       '\\' => Ok(self.single(TokenKind::Other)),
@@ -340,10 +340,10 @@ impl<'a> Lexer<'a> {
   /// A command to the client, which takes up a line of its own.
   fn line_command(&mut self) -> Option<TokenKind> {
     let line = self.rest_of_line();
-    let trimmed = line.trim_end();
-    let first_word_len = trimmed.find(|c: char| c.is_whitespace()).unwrap_or(trimmed.len());
+    let trimmed = line.trim_end_matches(is_space);
+    let first_word_len = trimmed.find(is_space).unwrap_or(trimmed.len());
     let first_word = &trimmed[..first_word_len];
-    let after_first = trimmed[first_word_len..].trim_start();
+    let after_first = trimmed[first_word_len..].trim_start_matches(is_space);
 
     if first_word.eq_ignore_ascii_case("delimiter")
       && matches!(self.dialect, Dialect::MySql | Dialect::Generic)
@@ -359,10 +359,10 @@ impl<'a> Lexer<'a> {
       // `GO` or `GO 5`, optionally followed by a comment
       let rest = after_first;
       let count_len = rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len());
-      let after_count = rest[count_len..].trim_start();
+      let after_count = rest[count_len..].trim_start_matches(is_space);
       if after_count.is_empty() || after_count.starts_with("--") {
         let len = trimmed.len() - after_count.len();
-        self.pos += line[..len].trim_end().len();
+        self.pos += line[..len].trim_end_matches(is_space).len();
         return Some(TokenKind::BatchSeparator);
       }
     }
@@ -383,6 +383,26 @@ impl<'a> Lexer<'a> {
       };
     if is_directive {
       self.pos += trimmed.len();
+      // a SQL*Plus command continues onto the next line after a ` -` (ex. `EXEC p( -`), though
+      // a remark or a prompt is often a line of dashes
+      let continues = self.dialect == Dialect::Oracle
+        && !["rem", "remark", "pro", "prompt"]
+          .iter()
+          .any(|c| c.eq_ignore_ascii_case(first_word));
+      while continues
+        && (self.text[..self.pos].ends_with(" -") || self.text[..self.pos].ends_with("\t-"))
+        && self.rest().trim_start_matches([' ', '\t']).starts_with(['\n', '\r'])
+      {
+        let next_line = self.rest().trim_start_matches([' ', '\t']);
+        let next_line = next_line.strip_prefix('\r').unwrap_or(next_line);
+        let next_line = next_line.strip_prefix('\n').unwrap_or(next_line);
+        let line_end = next_line.find('\n').unwrap_or(next_line.len());
+        let line_len = next_line[..line_end].trim_end_matches(is_space).len();
+        if line_len == 0 {
+          break;
+        }
+        self.pos = self.text.len() - next_line.len() + line_len;
+      }
       return Some(TokenKind::Directive);
     }
     None
@@ -400,7 +420,7 @@ impl<'a> Lexer<'a> {
         .is_some_and(|token| token.kind == TokenKind::Semicolon)
       && self.rest().get(..2).is_some_and(|word| word.eq_ignore_ascii_case("go"))
       && {
-        let after = self.rest_of_line()[2..].trim();
+        let after = self.rest_of_line()[2..].trim_matches(is_space);
         after.is_empty() || after.starts_with("--")
       }
   }
@@ -417,7 +437,7 @@ impl<'a> Lexer<'a> {
 
   /// The delimiter a `DELIMITER` command sets, from the text that follows the word.
   fn delimiter_command_value(&self, value: &'a str) -> Option<&'a str> {
-    if value.is_empty() || value.contains(char::is_whitespace) || value.contains(['(', ')']) || value.ends_with(',') {
+    if value.is_empty() || value.contains(is_space) || value.contains(['(', ')']) || value.ends_with(',') {
       return None;
     }
     // a column named `delimiter` is far more likely in the generic dialect than a delimiter made
@@ -432,7 +452,7 @@ impl<'a> Lexer<'a> {
 
   fn is_double_dash_comment(&self) -> bool {
     // MySQL only reads `--` as a comment when whitespace follows it
-    self.dialect != Dialect::MySql || self.peek_at(2).is_none_or(|c| c.is_whitespace() || c.is_control())
+    self.dialect != Dialect::MySql || self.peek_at(2).is_none_or(|c| is_space(c) || c.is_control())
   }
 
   fn line_comment(&mut self) -> TokenKind {
@@ -461,7 +481,7 @@ impl<'a> Lexer<'a> {
     }
     // SQLite lets a comment run to the end of the input
     if self.dialect == Dialect::Sqlite {
-      self.pos = start + self.text[start..].trim_end().len();
+      self.pos = start + self.text[start..].trim_end_matches(is_space).len();
       return Ok(TokenKind::BlockComment);
     }
     Err(self.error(start, "unterminated block comment"))
@@ -475,7 +495,7 @@ impl<'a> Lexer<'a> {
       Dialect::SqlServer if starts_name => self.temp_table_name(),
       Dialect::PostgreSql => self.operator(),
       Dialect::Generic => {
-        if next.is_none_or(|c| c.is_whitespace()) || next == Some('!') {
+        if next.is_none_or(is_space) || next == Some('!') {
           self.line_comment()
         } else if next == Some('@') && self.peek_at(2).is_some_and(is_ident_start) && !self.line_start {
           // a T-SQL temporary table whose name starts with `@` (ex. `#@temp`), as in SQL Server
@@ -674,7 +694,7 @@ impl<'a> Lexer<'a> {
     match line[1..].find(']') {
       Some(index) => {
         let content = &line[1..1 + index];
-        !content.is_empty() && !content.contains('[') && !content.trim().is_empty()
+        !content.is_empty() && !content.contains('[') && !content.trim_matches(is_space).is_empty()
       }
       None => false,
     }
@@ -691,7 +711,7 @@ impl<'a> Lexer<'a> {
     match self.text[start + 2..].find(close) {
       Some(index) => {
         self.pos = start + 2 + index + 2;
-        let ends_line = self.rest_of_line().trim().is_empty();
+        let ends_line = self.rest_of_line().trim_matches(is_space).is_empty();
         let is_tag = close != "}}";
         Ok(if is_tag && self.line_start && ends_line {
           TokenKind::TemplateLine
@@ -718,7 +738,7 @@ impl<'a> Lexer<'a> {
       self.pos += 1;
       self.pos += self
         .rest()
-        .find(|c: char| c.is_ascii_whitespace() || matches!(c, ',' | ';' | '(' | ')' | '\''))
+        .find(|c: char| c.is_ascii_whitespace() || matches!(c, ',' | ';' | '(' | ')' | '\'' | '"'))
         .unwrap_or(self.rest().len());
       return TokenKind::Variable;
     }
@@ -1243,7 +1263,7 @@ fn is_sqlcmd_command(line: &str) -> bool {
   let word_len = rest.find(|c: char| !c.is_ascii_alphabetic()).unwrap_or(rest.len());
   let word = &rest[..word_len];
   word_len > 0
-    && rest[word_len..].chars().next().is_none_or(|c| c.is_whitespace())
+    && rest[word_len..].chars().next().is_none_or(is_space)
     && COMMANDS.iter().any(|c| c.eq_ignore_ascii_case(word))
 }
 
@@ -1313,6 +1333,11 @@ pub fn is_ident_char(c: char) -> bool {
 
 fn is_unicode_space(c: char) -> bool {
   !c.is_ascii() && c.is_whitespace()
+}
+
+/// Whether `c` is whitespace between tokens, which is only ever ASCII.
+pub fn is_space(c: char) -> bool {
+  matches!(c, ' ' | '\t' | '\n' | '\r' | '\x0b' | '\x0c')
 }
 
 fn is_operator_char(c: char) -> bool {
