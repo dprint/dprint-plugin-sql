@@ -1,0 +1,20 @@
+~~ lineWidth: 40 ~~
+== should break a row that doesn't fit the line width ==
+INSERT INTO `projects` (`name`, `night_of`) VALUES ('R Wireless', unixepoch('2026-06-30 17:00:00-04:00'));
+
+[expect]
+INSERT INTO `projects` (
+  `name`,
+  `night_of`
+)
+VALUES (
+  'R Wireless',
+  unixepoch('2026-06-30 17:00:00-04:00')
+);
+
+== should keep rows on one line that fit the line width ==
+INSERT INTO t (a, b) VALUES (1, 2), (3, 4);
+
+[expect]
+INSERT INTO t (a, b)
+VALUES (1, 2), (3, 4);

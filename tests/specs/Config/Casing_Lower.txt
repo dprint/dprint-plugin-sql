@@ -1,0 +1,26 @@
+~~ casing: lower ~~
+== should lowercase keywords ==
+SELECT A, B FROM T WHERE C = 1 AND D IS NOT NULL ORDER BY A DESC;
+
+[expect]
+select A, B
+from T
+where C = 1 and D is not null
+order by A desc;
+
+== should not lowercase names ==
+SELECT Name, FIRST FROM Users;
+
+[expect]
+select Name, FIRST
+from Users;
+
+== should lowercase the keywords of procedural code ==
+BEGIN IF X THEN RETURN 1; END IF; END;
+
+[expect]
+begin
+  if X then
+    return 1;
+  end if;
+end;

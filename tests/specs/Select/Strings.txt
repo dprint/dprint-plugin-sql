@@ -1,0 +1,80 @@
+~~ lineWidth: 40 ~~
+== should not break a list for a string spanning lines ==
+SELECT 'line one
+line two', b FROM t;
+
+[expect]
+SELECT 'line one
+line two', b
+FROM t;
+
+== should keep a string spanning lines against its function ==
+SELECT st_geomfromtext('LINESTRING(1 2,
+  3 4)', 4326) AS geom FROM t;
+
+[expect]
+SELECT st_geomfromtext('LINESTRING(1 2,
+  3 4)', 4326) AS geom
+FROM t;
+
+== should indent the first line of a string spanning lines ==
+SELECT first_column_name, second_column_name, 'line one
+line two' AS text_value FROM t;
+
+[expect]
+SELECT
+  first_column_name,
+  second_column_name,
+  'line one
+line two' AS text_value
+FROM t;
+
+== should format values with a string spanning lines ==
+INSERT INTO t (a, b) VALUES (1, 'one
+two');
+
+[expect]
+INSERT INTO t (a, b)
+VALUES (1, 'one
+two');
+
+== should break brackets around a string spanning lines the same way every time ==
+SELECT a, b, f(N'a first line that is longer than the line width;
+  second line', 'x') AS c, d FROM t;
+
+[expect]
+SELECT
+  a,
+  b,
+  f(
+    N'a first line that is longer than the line width;
+  second line',
+    'x'
+  ) AS c,
+  d
+FROM t;
+
+== should break a list around calls holding a string spanning lines the same way every time ==
+SELECT x, y, f('[true]', '$[*] ? (@ == true &&
+  $x == true)', jsonb_build_object('x', x, 'y', y)) AS z FROM t;
+
+[expect]
+SELECT
+  x,
+  y,
+  f(
+    '[true]',
+    '$[*] ? (@ == true &&
+  $x == true)',
+    jsonb_build_object('x', x, 'y', y)
+  ) AS z
+FROM t;
+
+== should keep a list on its line around a string spanning lines with an alias ==
+SELECT a, 'line one
+line two' AS b, c FROM t;
+
+[expect]
+SELECT a, 'line one
+line two' AS b, c
+FROM t;

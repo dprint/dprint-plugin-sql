@@ -1,0 +1,87 @@
+== should keep a short case on one line ==
+SELECT CASE WHEN a = 1 THEN 'one' ELSE 'other' END FROM t;
+
+[expect]
+SELECT CASE WHEN a = 1 THEN 'one' ELSE 'other' END
+FROM t;
+
+== should format a simple case ==
+SELECT CASE status WHEN 1 THEN 'active' WHEN 2 THEN 'inactive' ELSE 'unknown' END AS status_name FROM t;
+
+[expect]
+SELECT CASE status WHEN 1 THEN 'active' WHEN 2 THEN 'inactive' ELSE 'unknown' END AS status_name
+FROM t;
+
+== should keep a case the author wrote over several lines ==
+SELECT CASE
+WHEN a = 1 THEN 'one'
+WHEN a = 2 THEN 'two'
+END AS n FROM t;
+
+[expect]
+SELECT
+  CASE
+    WHEN a = 1 THEN 'one'
+    WHEN a = 2 THEN 'two'
+  END AS n
+FROM t;
+
+== should format nested cases ==
+SELECT CASE WHEN a = 1 THEN CASE WHEN b = 1 THEN 'x' ELSE 'y' END ELSE 'z' END FROM t;
+
+[expect]
+SELECT CASE WHEN a = 1 THEN CASE WHEN b = 1 THEN 'x' ELSE 'y' END ELSE 'z' END
+FROM t;
+
+== should format nested cases over several lines ==
+SELECT
+  CASE
+    WHEN a = 1 THEN
+      CASE
+        WHEN b = 1 THEN 'x'
+        ELSE 'y'
+      END
+    ELSE 'z'
+  END
+FROM t;
+
+[expect]
+SELECT
+  CASE
+    WHEN a = 1 THEN CASE
+      WHEN b = 1 THEN 'x'
+      ELSE 'y'
+    END
+    ELSE 'z'
+  END
+FROM t;
+
+== should format a case in where ==
+SELECT * FROM t WHERE CASE WHEN a = 1 THEN b ELSE c END = 2;
+
+[expect]
+SELECT *
+FROM t
+WHERE CASE WHEN a = 1 THEN b ELSE c END = 2;
+
+== should format a case in order by ==
+SELECT * FROM t ORDER BY CASE WHEN a IS NULL THEN 1 ELSE 0 END, a;
+
+[expect]
+SELECT *
+FROM t
+ORDER BY CASE WHEN a IS NULL THEN 1 ELSE 0 END, a;
+
+== should format a case in a function call ==
+SELECT sum(CASE WHEN a > 0 THEN a ELSE 0 END) AS positive FROM t;
+
+[expect]
+SELECT sum(CASE WHEN a > 0 THEN a ELSE 0 END) AS positive
+FROM t;
+
+== should format a case without else ==
+SELECT CASE WHEN a THEN 1 END FROM t;
+
+[expect]
+SELECT CASE WHEN a THEN 1 END
+FROM t;

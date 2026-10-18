@@ -1,0 +1,168 @@
+~~ dialect: sqlserver ~~
+== should format a procedure ==
+CREATE PROCEDURE dbo.GetUser @Id INT AS BEGIN SET NOCOUNT ON; SELECT * FROM dbo.Users WHERE Id = @Id; END
+GO
+
+[expect]
+CREATE PROCEDURE dbo.GetUser @Id INT
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SELECT *
+  FROM dbo.Users
+  WHERE Id = @Id;
+END
+GO
+
+== should break parameters that don't fit ==
+CREATE OR ALTER PROCEDURE dbo.GetOrders @CustomerId INT, @Since DATETIME2 = NULL, @IncludeCancelled BIT = 0, @Total MONEY OUTPUT AS
+BEGIN
+SELECT @Total = SUM(Total) FROM dbo.Orders WHERE CustomerId = @CustomerId;
+END
+GO
+
+[expect]
+CREATE OR ALTER PROCEDURE dbo.GetOrders
+  @CustomerId INT,
+  @Since DATETIME2 = NULL,
+  @IncludeCancelled BIT = 0,
+  @Total MONEY OUTPUT
+AS
+BEGIN
+  SELECT @Total = SUM(Total)
+  FROM dbo.Orders
+  WHERE CustomerId = @CustomerId;
+END
+GO
+
+== should format parameters in brackets ==
+CREATE PROCEDURE dbo.p (@a INT, @b INT) AS SELECT @a + @b;
+GO
+
+[expect]
+CREATE PROCEDURE dbo.p (@a INT, @b INT)
+AS
+SELECT @a + @b;
+GO
+
+== should format a procedure without a block ==
+CREATE PROCEDURE dbo.p
+AS
+SET NOCOUNT ON
+SELECT 1
+SELECT 2
+GO
+
+[expect]
+CREATE PROCEDURE dbo.p
+AS
+SET NOCOUNT ON
+SELECT 1
+SELECT 2
+GO
+
+== should format procedure options ==
+CREATE PROCEDURE dbo.p @a INT WITH RECOMPILE, EXECUTE AS OWNER AS BEGIN SELECT @a; END
+GO
+
+[expect]
+CREATE PROCEDURE dbo.p @a INT
+WITH RECOMPILE, EXECUTE AS OWNER
+AS
+BEGIN
+  SELECT @a;
+END
+GO
+
+== should format a scalar function ==
+CREATE FUNCTION dbo.AddOne(@a INT) RETURNS INT AS BEGIN RETURN @a + 1; END
+GO
+
+[expect]
+CREATE FUNCTION dbo.AddOne(@a INT)
+RETURNS INT
+AS
+BEGIN
+  RETURN @a + 1;
+END
+GO
+
+== should format an inline table valued function ==
+CREATE FUNCTION dbo.ActiveUsers() RETURNS TABLE AS RETURN (SELECT Id, Name FROM dbo.Users WHERE Active = 1);
+GO
+
+[expect]
+CREATE FUNCTION dbo.ActiveUsers()
+RETURNS TABLE
+AS RETURN (SELECT Id, Name FROM dbo.Users WHERE Active = 1);
+GO
+
+== should format a multi-statement table valued function ==
+CREATE FUNCTION dbo.Numbers(@n INT) RETURNS @t TABLE (n INT) AS
+BEGIN
+DECLARE @i INT = 1;
+WHILE @i <= @n BEGIN INSERT INTO @t VALUES (@i); SET @i += 1; END
+RETURN;
+END
+GO
+
+[expect]
+CREATE FUNCTION dbo.Numbers(@n INT)
+RETURNS @t TABLE (n INT)
+AS
+BEGIN
+  DECLARE @i INT = 1;
+  WHILE @i <= @n
+  BEGIN
+    INSERT INTO @t
+    VALUES (@i);
+    SET @i += 1;
+  END
+  RETURN;
+END
+GO
+
+== should format a trigger ==
+CREATE TRIGGER dbo.trg_Users ON dbo.Users AFTER INSERT, UPDATE AS
+BEGIN
+SET NOCOUNT ON;
+IF UPDATE(Name) UPDATE u SET Modified = GETDATE() FROM dbo.Users u INNER JOIN inserted i ON i.Id = u.Id;
+END
+GO
+
+[expect]
+CREATE TRIGGER dbo.trg_Users ON dbo.Users AFTER INSERT, UPDATE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  IF UPDATE(Name)
+    UPDATE u
+    SET Modified = GETDATE()
+    FROM dbo.Users u
+      INNER JOIN inserted i ON i.Id = u.Id;
+END
+GO
+
+== should format exec ==
+EXEC dbo.GetUser @Id = 1;
+EXEC dbo.GetOrders 1, '2020-01-01';
+EXECUTE @result = dbo.p @a = 1, @b = @x OUTPUT;
+EXEC (@sql);
+EXEC sp_executesql @sql, N'@id INT', @id = 1;
+
+[expect]
+EXEC dbo.GetUser @Id = 1;
+EXEC dbo.GetOrders 1, '2020-01-01';
+EXECUTE @result = dbo.p @a = 1, @b = @x OUTPUT;
+EXEC (@sql);
+EXEC sp_executesql @sql, N'@id INT', @id = 1;
+
+== should break exec arguments that don't fit ==
+EXEC dbo.SomeLongProcedureName @FirstParameter = 'first value', @SecondParameter = 'second value', @ThirdParameter = 3, @Fourth = 4;
+
+[expect]
+EXEC dbo.SomeLongProcedureName
+  @FirstParameter = 'first value',
+  @SecondParameter = 'second value',
+  @ThirdParameter = 3,
+  @Fourth = 4;

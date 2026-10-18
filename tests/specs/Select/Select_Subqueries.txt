@@ -1,0 +1,104 @@
+== should keep a short subquery on one line ==
+SELECT * FROM t WHERE id IN (SELECT id FROM banned);
+
+[expect]
+SELECT *
+FROM t
+WHERE id IN (SELECT id FROM banned);
+
+== should keep a subquery the author wrote over several lines ==
+SELECT * FROM t WHERE id IN (
+  SELECT id FROM banned
+);
+
+[expect]
+SELECT *
+FROM t
+WHERE id IN (
+  SELECT id
+  FROM banned
+);
+
+== should format exists ==
+SELECT * FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.id = t.id);
+
+[expect]
+SELECT *
+FROM t
+WHERE EXISTS (SELECT 1 FROM u WHERE u.id = t.id);
+
+== should format not exists ==
+SELECT * FROM t WHERE NOT EXISTS(SELECT 1 FROM u WHERE u.id = t.id);
+
+[expect]
+SELECT *
+FROM t
+WHERE NOT EXISTS (SELECT 1 FROM u WHERE u.id = t.id);
+
+== should format a scalar subquery ==
+SELECT a, (SELECT max(b) FROM u WHERE u.a = t.a) AS max_b FROM t;
+
+[expect]
+SELECT a, (SELECT max(b) FROM u WHERE u.a = t.a) AS max_b
+FROM t;
+
+== should format a subquery in from ==
+SELECT x.a FROM (SELECT a FROM t) AS x;
+
+[expect]
+SELECT x.a
+FROM (SELECT a FROM t) AS x;
+
+== should format a subquery in from written over several lines ==
+SELECT x.a FROM (
+SELECT a FROM t WHERE b = 1
+) x WHERE x.a > 1;
+
+[expect]
+SELECT x.a
+FROM (
+  SELECT a
+  FROM t
+  WHERE b = 1
+) x
+WHERE x.a > 1;
+
+== should format nested subqueries ==
+SELECT * FROM (
+  SELECT * FROM (
+    SELECT a FROM t
+  ) AS inner_query
+) AS outer_query;
+
+[expect]
+SELECT *
+FROM (
+  SELECT *
+  FROM (
+    SELECT a
+    FROM t
+  ) AS inner_query
+) AS outer_query;
+
+== should format lateral ==
+SELECT * FROM t, LATERAL (SELECT * FROM u WHERE u.t_id = t.id LIMIT 1) AS l;
+
+[expect]
+SELECT *
+FROM t, LATERAL (SELECT * FROM u WHERE u.t_id = t.id LIMIT 1) AS l;
+
+== should format a subquery compared with an operator ==
+SELECT * FROM t WHERE a > (SELECT avg(a) FROM t);
+
+[expect]
+SELECT *
+FROM t
+WHERE a > (SELECT avg(a) FROM t);
+
+== should format any and all ==
+SELECT * FROM t WHERE a = ANY(SELECT a FROM u) OR b > ALL (SELECT b FROM u);
+
+[expect]
+SELECT *
+FROM t
+WHERE a = ANY(SELECT a FROM u) OR b > ALL (SELECT b FROM u);

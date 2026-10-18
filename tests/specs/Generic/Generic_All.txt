@@ -1,0 +1,134 @@
+== should tell bracketed identifiers from arrays ==
+SELECT [Name], arr[1], ARRAY[1, 2] FROM [dbo].[Users];
+
+[expect]
+SELECT [Name], arr[1], ARRAY[1, 2]
+FROM [dbo].[Users];
+
+== should tell hash comments from temporary tables ==
+# a comment
+SELECT * INTO #temp FROM t; # another comment
+SELECT * FROM
+#temp;
+
+[expect]
+# a comment
+SELECT *
+INTO #temp
+FROM t; # another comment
+SELECT *
+FROM #temp;
+
+== should read go as a batch separator ==
+SELECT 1
+GO
+SELECT 2
+
+[expect]
+SELECT 1
+GO
+SELECT 2
+
+== should read delimiter commands ==
+DELIMITER //
+CREATE PROCEDURE p() BEGIN SELECT 1; END //
+DELIMITER ;
+
+[expect]
+DELIMITER //
+CREATE PROCEDURE p()
+BEGIN
+  SELECT 1;
+END //
+DELIMITER ;
+
+== should read the oracle slash ==
+BEGIN NULL; END;
+/
+
+[expect]
+BEGIN
+  NULL;
+END;
+/
+
+== should read dollar quoted strings ==
+SELECT $$text$$;
+
+[expect]
+SELECT $$text$$;
+
+== should format t-sql without semicolons ==
+DECLARE @a INT
+SET @a = 1
+SELECT @a
+
+[expect]
+DECLARE @a INT
+SET @a = 1
+SELECT @a
+
+== should format a mysql procedure ==
+CREATE PROCEDURE p(IN a INT) BEGIN DECLARE b INT DEFAULT 0; IF a > 0 THEN SET b = a; END IF; SELECT b; END;
+
+[expect]
+CREATE PROCEDURE p(IN a INT)
+BEGIN
+  DECLARE b INT DEFAULT 0;
+  IF a > 0 THEN
+    SET b = a;
+  END IF;
+  SELECT b;
+END;
+
+== should format a t-sql procedure ==
+CREATE PROCEDURE dbo.p @a INT AS BEGIN SET NOCOUNT ON; IF @a > 0 SELECT @a; END
+GO
+
+[expect]
+CREATE PROCEDURE dbo.p @a INT
+AS
+BEGIN
+  SET NOCOUNT ON;
+  IF @a > 0
+    SELECT @a;
+END
+GO
+
+== should format an oracle procedure ==
+CREATE OR REPLACE PROCEDURE p (a IN NUMBER) IS v NUMBER; BEGIN v := a; END p;
+/
+
+[expect]
+CREATE OR REPLACE PROCEDURE p (a IN NUMBER) IS
+  v NUMBER;
+BEGIN
+  v := a;
+END p;
+/
+
+== should format a plpgsql function ==
+CREATE FUNCTION f() RETURNS int LANGUAGE plpgsql AS $$ BEGIN RETURN 1; END $$;
+
+[expect]
+CREATE FUNCTION f()
+RETURNS int
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN 1;
+END
+$$;
+
+== should format a plpgsql declare section ==
+DO $$ DECLARE a int := 1; b int := 2; BEGIN RAISE NOTICE '%', a + b; END $$;
+
+[expect]
+DO $$
+DECLARE
+  a int := 1;
+  b int := 2;
+BEGIN
+  RAISE NOTICE '%', a + b;
+END
+$$;

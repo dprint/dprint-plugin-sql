@@ -1,6 +1,6 @@
 # @dprint/sql
 
-npm distribution of [dprint-plugin-sql](https://github.com/dprint/dprint-plugin-sql) which wraps [sqlformat-rs](https://github.com/shssoichiro/sqlformat-rs).
+npm distribution of [dprint-plugin-sql](https://github.com/dprint/dprint-plugin-sql), a SQL formatter.
 
 Use this with [@dprint/formatter](https://github.com/dprint/js-formatter) or just use @dprint/formatter and download the [dprint-plugin-sql WASM file](https://github.com/dprint/dprint-plugin-sql/releases).
 

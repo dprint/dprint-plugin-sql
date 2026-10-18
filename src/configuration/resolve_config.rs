@@ -36,12 +36,24 @@ pub fn resolve_config(
   let uppercase_default = if let Some(ConfigKeyValue::Bool(value)) = config.get("uppercase") {
     let value = *value;
     config.shift_remove("uppercase");
-    if value { UppercaseKind::Upper } else { UppercaseKind::Preserve }
+    if value {
+      UppercaseKind::Upper
+    } else {
+      UppercaseKind::Preserve
+    }
   } else {
     UppercaseKind::Preserve
   };
 
   let resolved_config = Configuration {
+    line_width: get_value(
+      &mut config,
+      "lineWidth",
+      global_config
+        .line_width
+        .unwrap_or(RECOMMENDED_GLOBAL_CONFIGURATION.line_width),
+      &mut diagnostics,
+    ),
     use_tabs: get_value(
       &mut config,
       "useTabs",

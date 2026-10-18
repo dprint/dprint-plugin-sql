@@ -1,0 +1,105 @@
+== should format a cte ==
+WITH a AS (SELECT 1 AS x) SELECT x FROM a;
+
+[expect]
+WITH a AS (SELECT 1 AS x)
+SELECT x
+FROM a;
+
+== should put each cte on its own line ==
+WITH a AS (SELECT 1 AS x), b AS (SELECT 2 AS y) SELECT * FROM a, b;
+
+[expect]
+WITH a AS (SELECT 1 AS x),
+b AS (SELECT 2 AS y)
+SELECT *
+FROM a, b;
+
+== should keep a cte written over several lines ==
+WITH a AS (
+SELECT x FROM t WHERE y = 1
+), b AS (
+SELECT x FROM a
+)
+SELECT * FROM b;
+
+[expect]
+WITH a AS (
+  SELECT x
+  FROM t
+  WHERE y = 1
+),
+b AS (
+  SELECT x
+  FROM a
+)
+SELECT *
+FROM b;
+
+== should format a recursive cte ==
+WITH RECURSIVE nums (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM nums WHERE n < 10) SELECT n FROM nums;
+
+[expect]
+WITH RECURSIVE nums (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM nums WHERE n < 10)
+SELECT n
+FROM nums;
+
+== should format column lists ==
+WITH a (x, y) AS (SELECT 1, 2) SELECT * FROM a;
+
+[expect]
+WITH a (x, y) AS (SELECT 1, 2)
+SELECT *
+FROM a;
+
+== should format materialized ==
+WITH a AS MATERIALIZED (SELECT 1), b AS NOT MATERIALIZED (SELECT 2) SELECT * FROM a, b;
+
+[expect]
+WITH a AS MATERIALIZED (SELECT 1),
+b AS NOT MATERIALIZED (SELECT 2)
+SELECT *
+FROM a, b;
+
+== should format a cte before an insert ==
+WITH a AS (SELECT 1 AS x) INSERT INTO t (x) SELECT x FROM a;
+
+[expect]
+WITH a AS (SELECT 1 AS x)
+INSERT INTO t (x)
+SELECT x
+FROM a;
+
+== should format a cte before an update ==
+WITH a AS (SELECT id FROM t WHERE x = 1) UPDATE t SET y = 2 WHERE id IN (SELECT id FROM a);
+
+[expect]
+WITH a AS (SELECT id FROM t WHERE x = 1)
+UPDATE t
+SET y = 2
+WHERE id IN (SELECT id FROM a);
+
+== should format a cte before a delete ==
+WITH a AS (SELECT id FROM t) DELETE FROM u WHERE id IN (SELECT id FROM a);
+
+[expect]
+WITH a AS (SELECT id FROM t)
+DELETE FROM u
+WHERE id IN (SELECT id FROM a);
+
+== should format an insert of a cte ==
+INSERT INTO t (x) WITH a AS (SELECT 1 AS x) SELECT x FROM a;
+
+[expect]
+INSERT INTO t (x)
+WITH a AS (SELECT 1 AS x)
+SELECT x
+FROM a;
+
+== should not read a table hint as a cte ==
+SELECT * FROM t WITH (NOLOCK) WHERE a = 1;
+
+[expect]
+SELECT *
+FROM t WITH (NOLOCK)
+WHERE a = 1;

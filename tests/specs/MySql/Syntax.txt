@@ -1,0 +1,137 @@
+~~ dialect: mysql ~~
+== should format backticks ==
+SELECT `id`, `order` FROM `my db`.`my table` WHERE `select` = 1;
+
+[expect]
+SELECT `id`, `order`
+FROM `my db`.`my table`
+WHERE `select` = 1;
+
+== should format hash comments ==
+# a comment
+SELECT 1; # after
+SELECT 2; #no space
+
+[expect]
+# a comment
+SELECT 1; # after
+SELECT 2; #no space
+
+== should only read a double dash followed by a space as a comment ==
+SELECT 1--1;
+SELECT 1-- 1
+;
+
+[expect]
+SELECT 1 - -1;
+SELECT 1 -- 1
+;
+
+== should format backslash escapes ==
+SELECT 'it\'s', "say \"hi\"", 'a\\';
+
+[expect]
+SELECT 'it\'s', "say \"hi\"", 'a\\';
+
+== should format double quoted strings ==
+SELECT "text" AS a;
+
+[expect]
+SELECT "text" AS a;
+
+== should format user variables ==
+SET @a := 1, @b = 2;
+SELECT @a + @b, @@session.sql_mode, @@global.max_connections;
+
+[expect]
+SET @a := 1, @b = 2;
+SELECT @a + @b, @@session.sql_mode, @@global.max_connections;
+
+== should format limit with an offset ==
+SELECT * FROM t LIMIT 10, 20;
+
+[expect]
+SELECT *
+FROM t
+LIMIT 10, 20;
+
+== should format insert ignore and replace ==
+INSERT IGNORE INTO t (a) VALUES (1);
+REPLACE INTO t SET a = 1;
+
+[expect]
+INSERT IGNORE INTO t (a)
+VALUES (1);
+REPLACE INTO t
+SET a = 1;
+
+== should format the null-safe equality operator ==
+SELECT * FROM t WHERE a <=> b;
+
+[expect]
+SELECT *
+FROM t
+WHERE a <=> b;
+
+== should format index hints ==
+SELECT * FROM t USE INDEX (idx_a) WHERE a = 1;
+SELECT * FROM t FORCE INDEX (idx_a) IGNORE INDEX (idx_b);
+
+[expect]
+SELECT *
+FROM t USE INDEX (idx_a)
+WHERE a = 1;
+SELECT *
+FROM t FORCE INDEX (idx_a) IGNORE INDEX (idx_b);
+
+== should format charset introducers ==
+SELECT _utf8mb4'text' COLLATE utf8mb4_bin, b'1010', x'FF';
+
+[expect]
+SELECT _utf8mb4'text' COLLATE utf8mb4_bin, b'1010', x'FF';
+
+== should format a create table ==
+CREATE TABLE `t` (`id` INT UNSIGNED NOT NULL AUTO_INCREMENT, `name` VARCHAR(255) DEFAULT NULL, PRIMARY KEY (`id`), KEY `idx_name` (`name`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+[expect]
+CREATE TABLE `t` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `name` VARCHAR(255) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_name` (`name`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+== should format alter table ==
+ALTER TABLE t ADD COLUMN c INT AFTER b, DROP INDEX idx, MODIFY COLUMN d TEXT;
+
+[expect]
+ALTER TABLE t ADD COLUMN c INT AFTER b, DROP INDEX idx, MODIFY COLUMN d TEXT;
+
+== should format a multi-table delete ==
+DELETE t1, t2 FROM t1 INNER JOIN t2 ON t1.id = t2.id WHERE t1.a = 1;
+
+[expect]
+DELETE t1, t2
+FROM t1
+  INNER JOIN t2 ON t1.id = t2.id
+WHERE t1.a = 1;
+
+== should format straight join and modifiers ==
+SELECT STRAIGHT_JOIN SQL_NO_CACHE a FROM t;
+
+[expect]
+SELECT STRAIGHT_JOIN SQL_NO_CACHE a
+FROM t;
+
+== should format group concat ==
+SELECT GROUP_CONCAT(DISTINCT a ORDER BY a SEPARATOR ', ') FROM t;
+
+[expect]
+SELECT GROUP_CONCAT(DISTINCT a ORDER BY a SEPARATOR ', ')
+FROM t;
+
+== should format executable comments ==
+/*!40101 SET NAMES utf8 */;
+
+[expect]
+/*!40101 SET NAMES utf8 */;

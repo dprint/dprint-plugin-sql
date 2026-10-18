@@ -1,0 +1,67 @@
+~~ dialect: postgresql ~~
+== should format meta-commands after a query ==
+SELECT 1 AS x \gset
+SELECT :x;
+
+[expect]
+SELECT 1 AS x
+\gset
+SELECT :x;
+
+== should format pipelines ==
+\startpipeline
+SELECT $1 \bind 'val1' \sendpipeline
+BEGIN \bind \sendpipeline
+INSERT INTO t VALUES ($1) \bind 1 \sendpipeline
+COMMIT \bind \sendpipeline
+\endpipeline
+
+[expect]
+\startpipeline
+SELECT $1
+\bind 'val1' \sendpipeline
+BEGIN
+\bind \sendpipeline
+INSERT INTO t
+VALUES ($1)
+\bind 1 \sendpipeline
+COMMIT
+\bind \sendpipeline
+\endpipeline
+
+== should format several statements sent together ==
+copy (select 1) to stdout\; select 1/0;
+select 0\; copy t from stdin\; copy t from stdin\; select 1; -- 0 1
+1
+\.
+2
+\.
+select * from t;
+
+[expect]
+copy (select 1) to stdout\;
+select 1 / 0;
+select 0\;
+copy t from stdin\;
+copy t from stdin\;
+select 1; -- 0 1
+1
+\.
+2
+\.
+select *
+from t;
+
+== should format conditionals ==
+\if :is_superuser
+SELECT 1;
+\else
+SELECT 2;
+\endif
+
+[expect]
+\if :is_superuser
+SELECT 1;
+\else
+SELECT 2;
+\endif

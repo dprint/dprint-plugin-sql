@@ -1,6 +1,8 @@
-use super::configuration::{resolve_config, Configuration};
+use super::configuration::Configuration;
+use super::configuration::resolve_config;
 
-use dprint_core::configuration::{ConfigKeyMap, GlobalConfiguration};
+use dprint_core::configuration::ConfigKeyMap;
+use dprint_core::configuration::GlobalConfiguration;
 use dprint_core::generate_plugin_code;
 use dprint_core::plugins::CheckConfigUpdatesMessage;
 use dprint_core::plugins::ConfigChange;
@@ -28,6 +30,7 @@ impl SyncPluginHandler<Configuration> for SqlPluginHandler {
       file_matching: FileMatchingInfo {
         file_extensions: vec!["sql".to_string()],
         file_names: vec![],
+        additive: false,
       },
     }
   }
@@ -60,13 +63,13 @@ impl SyncPluginHandler<Configuration> for SqlPluginHandler {
     request: SyncFormatRequest<Configuration>,
     _format_with_host: impl FnMut(SyncHostFormatRequest) -> FormatResult,
   ) -> FormatResult {
-    if request.range.is_some() {
-      return Ok(None); // not implemented
+    let file_text = String::from_utf8(request.file_bytes)?;
+    let result = match request.range {
+      Some(range) => super::format_text_range(request.file_path, &file_text, range, request.config),
+      None => super::format_text(request.file_path, &file_text, request.config),
     }
-
-    let text = String::from_utf8_lossy(&request.file_bytes);
-    let maybe_text = super::format_text(request.file_path, &text, request.config);
-    Ok(maybe_text.map(|t| t.into_bytes()))
+    .map_err(FormatError::new)?;
+    Ok(result.map(|file_text| file_text.into_bytes()))
   }
 }
 

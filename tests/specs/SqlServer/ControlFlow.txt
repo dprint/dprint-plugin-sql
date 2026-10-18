@@ -1,0 +1,172 @@
+~~ dialect: sqlserver ~~
+== should format if without a block ==
+IF @a = 1 PRINT 'one' ELSE PRINT 'other'
+
+[expect]
+IF @a = 1
+  PRINT 'one'
+ELSE
+  PRINT 'other'
+
+== should format if with blocks ==
+IF @a = 1 BEGIN PRINT 'one'; SET @b = 1; END ELSE BEGIN PRINT 'other'; END
+
+[expect]
+IF @a = 1
+BEGIN
+  PRINT 'one';
+  SET @b = 1;
+END
+ELSE
+BEGIN
+  PRINT 'other';
+END
+
+== should format else if ==
+IF @a = 1 PRINT 'one' ELSE IF @a = 2 PRINT 'two' ELSE PRINT 'many'
+
+[expect]
+IF @a = 1
+  PRINT 'one'
+ELSE IF @a = 2
+  PRINT 'two'
+ELSE
+  PRINT 'many'
+
+== should format if exists ==
+IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'x') DROP TABLE x;
+IF NOT EXISTS (SELECT 1 FROM t) INSERT INTO t VALUES (1);
+
+[expect]
+IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'x')
+  DROP TABLE x;
+IF NOT EXISTS (SELECT 1 FROM t)
+  INSERT INTO t
+  VALUES (1);
+
+== should format an if condition that doesn't fit ==
+IF @FirstVariable = 1 AND @SecondVariable = 2 AND @ThirdVariable = 3 AND EXISTS (SELECT 1 FROM dbo.SomeTable WHERE SomeColumn = @FirstVariable) PRINT 'yes';
+
+[expect]
+IF @FirstVariable = 1
+    AND @SecondVariable = 2
+    AND @ThirdVariable = 3
+    AND EXISTS (SELECT 1 FROM dbo.SomeTable WHERE SomeColumn = @FirstVariable)
+  PRINT 'yes';
+
+== should format while ==
+WHILE @i < 10 BEGIN SET @i = @i + 1; IF @i = 5 CONTINUE; IF @i = 8 BREAK; END
+
+[expect]
+WHILE @i < 10
+BEGIN
+  SET @i = @i + 1;
+  IF @i = 5
+    CONTINUE;
+  IF @i = 8
+    BREAK;
+END
+
+== should format while without a block ==
+WHILE @i < 10 SET @i = @i + 1;
+
+[expect]
+WHILE @i < 10
+  SET @i = @i + 1;
+
+== should format try and catch ==
+BEGIN TRY SELECT 1 / 0; END TRY BEGIN CATCH SELECT ERROR_MESSAGE() AS msg; THROW; END CATCH
+
+[expect]
+BEGIN TRY
+  SELECT 1 / 0;
+END TRY
+BEGIN CATCH
+  SELECT ERROR_MESSAGE() AS msg;
+  THROW;
+END CATCH
+
+== should format nested blocks ==
+IF @a = 1
+BEGIN
+WHILE @b < 10
+BEGIN
+IF @b = 5
+BEGIN
+BREAK;
+END
+SET @b += 1;
+END
+END
+
+[expect]
+IF @a = 1
+BEGIN
+  WHILE @b < 10
+  BEGIN
+    IF @b = 5
+    BEGIN
+      BREAK;
+    END
+    SET @b += 1;
+  END
+END
+
+== should format goto and labels ==
+IF @a = 1 GOTO done;
+PRINT 'not done';
+done:
+PRINT 'done';
+
+[expect]
+IF @a = 1
+  GOTO done;
+PRINT 'not done';
+done:
+PRINT 'done';
+
+== should format waitfor and raiserror ==
+WAITFOR DELAY '00:00:05';
+RAISERROR('failed: %s', 16, 1, @msg) WITH NOWAIT;
+
+[expect]
+WAITFOR DELAY '00:00:05';
+RAISERROR('failed: %s', 16, 1, @msg) WITH NOWAIT;
+
+== should format transactions ==
+BEGIN TRAN;
+BEGIN TRANSACTION t1;
+COMMIT TRAN;
+ROLLBACK TRANSACTION t1;
+SAVE TRANSACTION s;
+
+[expect]
+BEGIN TRAN;
+BEGIN TRANSACTION t1;
+COMMIT TRAN;
+ROLLBACK TRANSACTION t1;
+SAVE TRANSACTION s;
+
+== should format cursors ==
+DECLARE c CURSOR LOCAL FAST_FORWARD FOR SELECT Id FROM dbo.Users;
+OPEN c;
+FETCH NEXT FROM c INTO @id;
+WHILE @@FETCH_STATUS = 0
+BEGIN
+PRINT @id;
+FETCH NEXT FROM c INTO @id;
+END
+CLOSE c;
+DEALLOCATE c;
+
+[expect]
+DECLARE c CURSOR LOCAL FAST_FORWARD FOR SELECT Id FROM dbo.Users;
+OPEN c;
+FETCH NEXT FROM c INTO @id;
+WHILE @@FETCH_STATUS = 0
+BEGIN
+  PRINT @id;
+  FETCH NEXT FROM c INTO @id;
+END
+CLOSE c;
+DEALLOCATE c;

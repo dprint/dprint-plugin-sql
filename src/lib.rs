@@ -1,7 +1,20 @@
+mod ast;
 pub mod configuration;
+mod error;
+mod format_range;
 mod format_text;
+mod generation;
+mod keywords;
+mod lexer;
+mod parser;
 
+pub use error::FormatError;
+pub use error::ParseError;
+pub use format_range::format_text_range;
 pub use format_text::format_text;
+
+#[cfg(feature = "tracing")]
+pub use format_text::trace_file;
 
 #[cfg(feature = "wasm")]
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]

@@ -1,0 +1,78 @@
+== should format template expressions ==
+select {{ ref('orders') }}.id, {{ dbt_utils.star(ref('customers')) }} from {{ ref('orders') }} where id = {{ var('id') }};
+
+[expect]
+select {{ ref('orders') }}.id, {{ dbt_utils.star(ref('customers')) }}
+from {{ ref('orders') }}
+where id = {{ var('id') }};
+
+== should keep template tags on lines of their own ==
+select id from t where 1 = 1
+{% if is_incremental() %}
+and updated_at > (select max(updated_at) from {{ this }})
+{% endif %}
+
+[expect]
+select id
+from t
+where 1 = 1
+  {% if is_incremental() %}
+  and updated_at > (select max(updated_at) from {{ this }})
+{% endif %}
+
+== should keep a template tag within a line ==
+select id from t where a = 1 {% if x %} and b = 2 {% endif %};
+
+[expect]
+select id
+from t
+where a = 1 {% if x %} and b = 2 {% endif %};
+
+== should keep a config block before a query ==
+{{ config(materialized='table') }}
+select 1 as id
+
+[expect]
+{{ config(materialized='table') }}
+select 1 as id
+
+== should keep template comments ==
+{# a comment #}
+select 1;
+
+[expect]
+{# a comment #}
+select 1;
+
+== should format a loop over columns ==
+select
+{% for column in columns %}
+{{ column }},
+{% endfor %}
+id
+from t
+
+[expect]
+select
+  {% for column in columns %}
+  {{ column }},
+  {% endfor %}
+  id
+from t
+
+== should keep a template tag spanning lines as it is ==
+select a
+{% if x
+  and y %}
+, b
+{% endif %}
+from t
+
+[expect]
+select
+  a,
+  {% if x
+  and y %}
+  b
+{% endif %}
+from t

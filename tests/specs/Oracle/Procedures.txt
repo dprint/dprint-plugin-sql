@@ -1,0 +1,227 @@
+~~ dialect: oracle ~~
+== should format a procedure ==
+CREATE OR REPLACE PROCEDURE raise_salary (p_emp_id IN NUMBER, p_amount IN NUMBER) IS
+v_salary NUMBER;
+BEGIN
+SELECT salary INTO v_salary FROM employees WHERE employee_id = p_emp_id;
+UPDATE employees SET salary = v_salary + p_amount WHERE employee_id = p_emp_id;
+COMMIT;
+EXCEPTION WHEN NO_DATA_FOUND THEN DBMS_OUTPUT.PUT_LINE('not found'); WHEN OTHERS THEN ROLLBACK; RAISE;
+END raise_salary;
+/
+
+[expect]
+CREATE OR REPLACE PROCEDURE raise_salary (p_emp_id IN NUMBER, p_amount IN NUMBER) IS
+  v_salary NUMBER;
+BEGIN
+  SELECT salary
+  INTO v_salary
+  FROM employees
+  WHERE employee_id = p_emp_id;
+  UPDATE employees
+  SET salary = v_salary + p_amount
+  WHERE employee_id = p_emp_id;
+  COMMIT;
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
+    DBMS_OUTPUT.PUT_LINE('not found');
+  WHEN OTHERS THEN
+    ROLLBACK;
+    RAISE;
+END raise_salary;
+/
+
+== should format a procedure with as ==
+CREATE PROCEDURE p AS v NUMBER := 0; BEGIN v := v + 1; END;
+/
+
+[expect]
+CREATE PROCEDURE p AS
+  v NUMBER := 0;
+BEGIN
+  v := v + 1;
+END;
+/
+
+== should format a procedure without declarations ==
+CREATE PROCEDURE p AS BEGIN NULL; END;
+/
+
+[expect]
+CREATE PROCEDURE p
+AS
+BEGIN
+  NULL;
+END;
+/
+
+== should format a function ==
+CREATE OR REPLACE FUNCTION get_name (p_id IN NUMBER) RETURN VARCHAR2 IS v_name VARCHAR2(100); BEGIN SELECT name INTO v_name FROM t WHERE id = p_id; RETURN v_name; END get_name;
+/
+
+[expect]
+CREATE OR REPLACE FUNCTION get_name (p_id IN NUMBER) RETURN VARCHAR2 IS
+  v_name VARCHAR2(100);
+BEGIN
+  SELECT name
+  INTO v_name
+  FROM t
+  WHERE id = p_id;
+  RETURN v_name;
+END get_name;
+/
+
+== should format declarations ==
+DECLARE
+c_limit CONSTANT NUMBER := 10;
+v_name employees.last_name%TYPE;
+v_row employees%ROWTYPE;
+CURSOR c_emp IS SELECT * FROM employees WHERE department_id = 10;
+TYPE t_names IS TABLE OF VARCHAR2(100) INDEX BY PLS_INTEGER;
+e_custom EXCEPTION;
+PRAGMA EXCEPTION_INIT(e_custom, -20001);
+BEGIN
+NULL;
+END;
+/
+
+[expect]
+DECLARE
+  c_limit CONSTANT NUMBER := 10;
+  v_name employees.last_name%TYPE;
+  v_row employees%ROWTYPE;
+  CURSOR c_emp IS SELECT * FROM employees WHERE department_id = 10;
+  TYPE t_names IS TABLE OF VARCHAR2(100) INDEX BY PLS_INTEGER;
+  e_custom EXCEPTION;
+  PRAGMA EXCEPTION_INIT(e_custom, -20001);
+BEGIN
+  NULL;
+END;
+/
+
+== should format loops ==
+BEGIN
+FOR i IN 1..10 LOOP DBMS_OUTPUT.PUT_LINE(i); END LOOP;
+FOR r IN (SELECT * FROM employees) LOOP DBMS_OUTPUT.PUT_LINE(r.last_name); END LOOP;
+FOR r IN c_emp LOOP NULL; END LOOP;
+WHILE v_count < 10 LOOP v_count := v_count + 1; END LOOP;
+LOOP FETCH c INTO v; EXIT WHEN c%NOTFOUND; END LOOP;
+END;
+/
+
+[expect]
+BEGIN
+  FOR i IN 1..10 LOOP
+    DBMS_OUTPUT.PUT_LINE(i);
+  END LOOP;
+  FOR r IN (SELECT * FROM employees) LOOP
+    DBMS_OUTPUT.PUT_LINE(r.last_name);
+  END LOOP;
+  FOR r IN c_emp LOOP
+    NULL;
+  END LOOP;
+  WHILE v_count < 10 LOOP
+    v_count := v_count + 1;
+  END LOOP;
+  LOOP
+    FETCH c INTO v;
+    EXIT WHEN c%NOTFOUND;
+  END LOOP;
+END;
+/
+
+== should format if statements ==
+BEGIN
+IF v_a > 0 THEN v_b := 1; ELSIF v_a < 0 THEN v_b := -1; ELSE v_b := 0; END IF;
+END;
+/
+
+[expect]
+BEGIN
+  IF v_a > 0 THEN
+    v_b := 1;
+  ELSIF v_a < 0 THEN
+    v_b := -1;
+  ELSE
+    v_b := 0;
+  END IF;
+END;
+/
+
+== should format a case statement ==
+BEGIN
+CASE v_grade WHEN 'A' THEN DBMS_OUTPUT.PUT_LINE('excellent'); WHEN 'B' THEN DBMS_OUTPUT.PUT_LINE('good'); ELSE DBMS_OUTPUT.PUT_LINE('other'); END CASE;
+END;
+/
+
+[expect]
+BEGIN
+  CASE v_grade
+    WHEN 'A' THEN
+      DBMS_OUTPUT.PUT_LINE('excellent');
+    WHEN 'B' THEN
+      DBMS_OUTPUT.PUT_LINE('good');
+    ELSE
+      DBMS_OUTPUT.PUT_LINE('other');
+  END CASE;
+END;
+/
+
+== should format a trigger ==
+CREATE OR REPLACE TRIGGER trg_bi BEFORE INSERT ON t FOR EACH ROW DECLARE v NUMBER; BEGIN SELECT seq.NEXTVAL INTO :NEW.id FROM dual; END;
+/
+
+[expect]
+CREATE OR REPLACE TRIGGER trg_bi BEFORE INSERT ON t FOR EACH ROW
+DECLARE
+  v NUMBER;
+BEGIN
+  SELECT seq.NEXTVAL
+  INTO :NEW.id
+  FROM dual;
+END;
+/
+
+== should format a trigger without declarations ==
+CREATE OR REPLACE TRIGGER trg_bu BEFORE UPDATE ON t FOR EACH ROW WHEN (NEW.a > 0) BEGIN :NEW.updated := SYSDATE; END;
+/
+
+[expect]
+CREATE OR REPLACE TRIGGER trg_bu BEFORE UPDATE ON t FOR EACH ROW WHEN (NEW.a > 0)
+BEGIN
+  :NEW.updated := SYSDATE;
+END;
+/
+
+== should format bulk collect and forall ==
+DECLARE TYPE t_ids IS TABLE OF NUMBER; v_ids t_ids;
+BEGIN
+SELECT id BULK COLLECT INTO v_ids FROM t;
+FORALL i IN 1..v_ids.COUNT DELETE FROM u WHERE id = v_ids(i);
+END;
+/
+
+[expect]
+DECLARE
+  TYPE t_ids IS TABLE OF NUMBER;
+  v_ids t_ids;
+BEGIN
+  SELECT id
+  BULK COLLECT INTO v_ids
+  FROM t;
+  FORALL i IN 1..v_ids.COUNT DELETE FROM u WHERE id = v_ids(i);
+END;
+/
+
+== should format execute immediate ==
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE t'; EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+
+[expect]
+BEGIN
+  EXECUTE IMMEDIATE 'DROP TABLE t';
+EXCEPTION
+  WHEN OTHERS THEN
+    NULL;
+END;
+/

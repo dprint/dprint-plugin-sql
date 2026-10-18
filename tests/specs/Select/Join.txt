@@ -1,0 +1,109 @@
+== should indent joins beneath from ==
+SELECT u.name, o.total FROM users u INNER JOIN orders o ON u.id = o.user_id WHERE o.total > 100
+
+[expect]
+SELECT u.name, o.total
+FROM users u
+  INNER JOIN orders o ON u.id = o.user_id
+WHERE o.total > 100
+
+== should format every kind of join ==
+SELECT * FROM a JOIN b ON a.id = b.id INNER JOIN c ON c.id = a.id LEFT JOIN d ON d.id = a.id LEFT OUTER JOIN e ON e.id = a.id RIGHT JOIN f ON f.id = a.id RIGHT OUTER JOIN g ON g.id = a.id FULL JOIN h ON h.id = a.id FULL OUTER JOIN i ON i.id = a.id CROSS JOIN j;
+
+[expect]
+SELECT *
+FROM a
+  JOIN b ON a.id = b.id
+  INNER JOIN c ON c.id = a.id
+  LEFT JOIN d ON d.id = a.id
+  LEFT OUTER JOIN e ON e.id = a.id
+  RIGHT JOIN f ON f.id = a.id
+  RIGHT OUTER JOIN g ON g.id = a.id
+  FULL JOIN h ON h.id = a.id
+  FULL OUTER JOIN i ON i.id = a.id
+  CROSS JOIN j;
+
+== should format natural joins ==
+SELECT * FROM a NATURAL JOIN b NATURAL LEFT JOIN c;
+
+[expect]
+SELECT *
+FROM a
+  NATURAL JOIN b
+  NATURAL LEFT JOIN c;
+
+== should format using ==
+SELECT * FROM a JOIN b USING (id) JOIN c USING (id, kind);
+
+[expect]
+SELECT *
+FROM a
+  JOIN b USING (id)
+  JOIN c USING (id, kind);
+
+== should format apply ==
+SELECT * FROM a CROSS APPLY f(a.x) AS f OUTER APPLY g(a.y) AS g;
+
+[expect]
+SELECT *
+FROM a
+  CROSS APPLY f(a.x) AS f
+  OUTER APPLY g(a.y) AS g;
+
+== should format a join of a subquery ==
+SELECT * FROM a JOIN (SELECT id FROM b WHERE x = 1) AS b ON b.id = a.id;
+
+[expect]
+SELECT *
+FROM a
+  JOIN (SELECT id FROM b WHERE x = 1) AS b ON b.id = a.id;
+
+== should format join hints ==
+SELECT * FROM a INNER HASH JOIN b ON a.id = b.id LEFT MERGE JOIN c ON c.id = a.id;
+
+[expect]
+SELECT *
+FROM a
+  INNER HASH JOIN b ON a.id = b.id
+  LEFT MERGE JOIN c ON c.id = a.id;
+
+== should format comma joins ==
+SELECT * FROM a, b, c WHERE a.id = b.id AND b.id = c.id;
+
+[expect]
+SELECT *
+FROM a, b, c
+WHERE a.id = b.id AND b.id = c.id;
+
+== should format a lateral join ==
+SELECT * FROM a CROSS JOIN LATERAL (SELECT * FROM b WHERE b.a_id = a.id) AS b;
+
+[expect]
+SELECT *
+FROM a
+  CROSS JOIN LATERAL (SELECT * FROM b WHERE b.a_id = a.id) AS b;
+
+== should format semi and anti joins ==
+SELECT * FROM a LEFT SEMI JOIN b ON a.id = b.id LEFT ANTI JOIN c ON a.id = c.id;
+
+[expect]
+SELECT *
+FROM a
+  LEFT SEMI JOIN b ON a.id = b.id
+  LEFT ANTI JOIN c ON a.id = c.id;
+
+== should format straight join ==
+SELECT * FROM a STRAIGHT_JOIN b ON a.id = b.id;
+
+[expect]
+SELECT *
+FROM a
+  STRAIGHT_JOIN b ON a.id = b.id;
+
+== should not read left as a join when it's a function ==
+SELECT LEFT(name, 3) FROM a LEFT JOIN b ON a.id = b.id;
+
+[expect]
+SELECT LEFT(name, 3)
+FROM a
+  LEFT JOIN b ON a.id = b.id;

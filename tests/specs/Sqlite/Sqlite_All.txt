@@ -1,0 +1,84 @@
+~~ dialect: sqlite ~~
+== should format a trigger ==
+CREATE TRIGGER update_ts AFTER UPDATE ON t BEGIN UPDATE t SET ts = CURRENT_TIMESTAMP WHERE id = NEW.id; END;
+
+[expect]
+CREATE TRIGGER update_ts AFTER UPDATE ON t
+BEGIN
+  UPDATE t
+  SET ts = CURRENT_TIMESTAMP
+  WHERE id = NEW.id;
+END;
+
+== should format a trigger with several statements ==
+CREATE TRIGGER IF NOT EXISTS log_delete BEFORE DELETE ON t FOR EACH ROW WHEN OLD.protected = 0
+BEGIN
+INSERT INTO log (id) VALUES (OLD.id);
+DELETE FROM children WHERE parent_id = OLD.id;
+END;
+
+[expect]
+CREATE TRIGGER IF NOT EXISTS log_delete BEFORE DELETE ON t FOR EACH ROW WHEN OLD.protected = 0
+BEGIN
+  INSERT INTO log (id)
+  VALUES (OLD.id);
+  DELETE FROM children
+  WHERE parent_id = OLD.id;
+END;
+
+== should format identifiers ==
+SELECT [a], `b`, "c" FROM [t];
+
+[expect]
+SELECT [a], `b`, "c"
+FROM [t];
+
+== should format parameters ==
+SELECT * FROM t WHERE a = ? AND b = ?1 AND c = :c AND d = @d AND e = $e;
+
+[expect]
+SELECT *
+FROM t
+WHERE a = ? AND b = ?1 AND c = :c AND d = @d AND e = $e;
+
+== should format upsert ==
+INSERT INTO t (a, b) VALUES (1, 2) ON CONFLICT (a) DO UPDATE SET b = excluded.b;
+
+[expect]
+INSERT INTO t (a, b)
+VALUES (1, 2)
+ON CONFLICT (a) DO UPDATE
+SET b = excluded.b;
+
+== should format insert or ignore ==
+INSERT OR IGNORE INTO t (a) VALUES (1);
+
+[expect]
+INSERT OR IGNORE INTO t (a)
+VALUES (1);
+
+== should format a create table ==
+CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL COLLATE NOCASE, data BLOB) WITHOUT ROWID;
+
+[expect]
+CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL COLLATE NOCASE, data BLOB) WITHOUT ROWID;
+
+== should format pragmas ==
+PRAGMA foreign_keys = ON;
+PRAGMA table_info(t);
+
+[expect]
+PRAGMA foreign_keys = ON;
+PRAGMA table_info(t);
+
+== should format attach ==
+ATTACH DATABASE 'other.db' AS other;
+
+[expect]
+ATTACH DATABASE 'other.db' AS other;
+
+== should format a comment that runs to the end of the file ==
+SELECT 1; /* unterminated
+
+[expect]
+SELECT 1; /* unterminated

@@ -1,0 +1,59 @@
+== should format a delete ==
+DELETE FROM t WHERE id = 1;
+
+[expect]
+DELETE FROM t
+WHERE id = 1;
+
+== should format a delete without a where ==
+DELETE FROM t;
+
+[expect]
+DELETE FROM t;
+
+== should format using ==
+DELETE FROM t USING u WHERE u.id = t.id;
+
+[expect]
+DELETE FROM t
+USING u
+WHERE u.id = t.id;
+
+== should format returning ==
+DELETE FROM t WHERE a = 1 RETURNING *;
+
+[expect]
+DELETE FROM t
+WHERE a = 1
+RETURNING *;
+
+== should format a t-sql delete from a join ==
+DELETE t FROM t INNER JOIN u ON u.id = t.id WHERE u.b = 1;
+
+[expect]
+DELETE t
+FROM t
+  INNER JOIN u ON u.id = t.id
+WHERE u.b = 1;
+
+== should format top ==
+DELETE TOP (10) FROM t WHERE a = 1;
+
+[expect]
+DELETE TOP (10) FROM t
+WHERE a = 1;
+
+== should format order by and limit ==
+DELETE FROM t ORDER BY id LIMIT 10;
+
+[expect]
+DELETE FROM t
+ORDER BY id
+LIMIT 10;
+
+== should format a subquery ==
+DELETE FROM t WHERE id IN (SELECT id FROM u WHERE x = 1);
+
+[expect]
+DELETE FROM t
+WHERE id IN (SELECT id FROM u WHERE x = 1);

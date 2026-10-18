@@ -1,0 +1,195 @@
+== should put spaces around binary operators ==
+SELECT a+b, a-b, a*b, a/b, a% b, a||b, a=b, a<>b, a!=b, a<b, a<=b, a>b, a>=b FROM t;
+
+[expect]
+SELECT a + b, a - b, a * b, a / b, a % b, a || b, a = b, a <> b, a != b, a < b, a <= b, a > b, a >= b
+FROM t;
+
+== should keep a percent sign written against both sides as it is ==
+SELECT a%b, a % b FROM t;
+
+[expect]
+SELECT a%b, a % b
+FROM t;
+
+== should not put a space after a unary operator ==
+SELECT -a, - b, +c, ~d, a * -1, a = -1, -(a + b), NOT a FROM t WHERE x = - 1;
+
+[expect]
+SELECT -a, -b, +c, ~d, a * -1, a = -1, -(a + b), NOT a
+FROM t
+WHERE x = -1;
+
+== should tell unary from binary after keywords ==
+SELECT CASE WHEN a THEN -1 ELSE -2 END, b - 1, NULL - 1 FROM t LIMIT -1;
+
+[expect]
+SELECT CASE WHEN a THEN -1 ELSE -2 END, b - 1, NULL - 1
+FROM t
+LIMIT -1;
+
+== should format the wildcard ==
+SELECT *, t.*, count(*) FROM t;
+
+[expect]
+SELECT *, t.*, count(*)
+FROM t;
+
+== should format casts ==
+SELECT CAST(a AS INT), a::int, b::numeric(10, 2), c::text[] FROM t;
+
+[expect]
+SELECT CAST(a AS INT), a::int, b::numeric(10, 2), c::text[]
+FROM t;
+
+== should format between ==
+SELECT * FROM t WHERE a BETWEEN 1 AND 10 AND b NOT BETWEEN 2 AND 3;
+
+[expect]
+SELECT *
+FROM t
+WHERE a BETWEEN 1 AND 10 AND b NOT BETWEEN 2 AND 3;
+
+== should format like ==
+SELECT * FROM t WHERE a LIKE 'x%' AND b NOT LIKE '%y' AND c ILIKE 'z' AND d LIKE 'a!%' ESCAPE '!';
+
+[expect]
+SELECT *
+FROM t
+WHERE a LIKE 'x%' AND b NOT LIKE '%y' AND c ILIKE 'z' AND d LIKE 'a!%' ESCAPE '!';
+
+== should format is null ==
+SELECT * FROM t WHERE a IS NULL AND b IS NOT NULL AND c IS DISTINCT FROM d;
+
+[expect]
+SELECT *
+FROM t
+WHERE a IS NULL AND b IS NOT NULL AND c IS DISTINCT FROM d;
+
+== should format in lists ==
+SELECT * FROM t WHERE a IN (1, 2, 3) AND b NOT IN ('x', 'y');
+
+[expect]
+SELECT *
+FROM t
+WHERE a IN (1, 2, 3) AND b NOT IN ('x', 'y');
+
+== should format function calls ==
+SELECT count(*), coalesce(a, b, 0), upper(trim(name)), now() FROM t;
+
+[expect]
+SELECT count(*), coalesce(a, b, 0), upper(trim(name)), now()
+FROM t;
+
+== should keep the spacing before a function's brackets ==
+SELECT f (a), g(b) FROM t;
+
+[expect]
+SELECT f (a), g(b)
+FROM t;
+
+== should put a space before brackets after keywords ==
+SELECT * FROM t WHERE a IN(1, 2) AND EXISTS(SELECT 1);
+
+[expect]
+SELECT *
+FROM t
+WHERE a IN (1, 2) AND EXISTS (SELECT 1);
+
+== should format special function syntax ==
+SELECT EXTRACT(YEAR FROM d), TRIM(BOTH ' ' FROM s), SUBSTRING(s FROM 1 FOR 2), POSITION('a' IN s), OVERLAY(s PLACING 'x' FROM 1) FROM t;
+
+[expect]
+SELECT
+  EXTRACT(YEAR FROM d),
+  TRIM(BOTH ' ' FROM s),
+  SUBSTRING(s FROM 1 FOR 2),
+  POSITION('a' IN s),
+  OVERLAY(s PLACING 'x' FROM 1)
+FROM t;
+
+== should format aggregate modifiers ==
+SELECT count(DISTINCT a), string_agg(b, ',' ORDER BY b), array_agg(c) FILTER (WHERE c > 0), percentile_cont(0.5) WITHIN GROUP (ORDER BY d) FROM t;
+
+[expect]
+SELECT
+  count(DISTINCT a),
+  string_agg(b, ',' ORDER BY b),
+  array_agg(c) FILTER (WHERE c > 0),
+  percentile_cont(0.5) WITHIN GROUP (ORDER BY d)
+FROM t;
+
+== should format windows ==
+SELECT row_number() OVER (PARTITION BY a ORDER BY b DESC), sum(c) OVER (ORDER BY d ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t;
+
+[expect]
+SELECT
+  row_number() OVER (PARTITION BY a ORDER BY b DESC),
+  sum(c) OVER (ORDER BY d ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM t;
+
+== should format intervals ==
+SELECT now() - INTERVAL '1 day', d + INTERVAL 3 MONTH FROM t;
+
+[expect]
+SELECT now() - INTERVAL '1 day', d + INTERVAL 3 MONTH
+FROM t;
+
+== should format strings ==
+SELECT 'it''s', N'unicode', E'esc\'aped', X'FF', B'0101' FROM t;
+
+[expect]
+SELECT 'it''s', N'unicode', E'esc\'aped', X'FF', B'0101'
+FROM t;
+
+== should format numbers ==
+SELECT 1, 1.5, .5, 1e10, 1.5E-3, 0xFF FROM t;
+
+[expect]
+SELECT 1, 1.5, .5, 1e10, 1.5E-3, 0xFF
+FROM t;
+
+== should format parameters ==
+SELECT * FROM t WHERE a = ? AND b = :b AND c = $1 AND d = @d;
+
+[expect]
+SELECT *
+FROM t
+WHERE a = ? AND b = :b AND c = $1 AND d = @d;
+
+== should format collate ==
+SELECT * FROM t ORDER BY name COLLATE "C";
+
+[expect]
+SELECT *
+FROM t
+ORDER BY name COLLATE "C";
+
+== should format array subscripts and constructors ==
+SELECT a[1], a[1:2], ARRAY[1, 2, 3], ARRAY(SELECT 1) FROM t;
+
+[expect]
+SELECT a[1], a[1:2], ARRAY[1, 2, 3], ARRAY(SELECT 1)
+FROM t;
+
+== should format row constructors ==
+SELECT * FROM t WHERE (a, b) = (1, 2) AND ROW(c, d) IS NOT NULL;
+
+[expect]
+SELECT *
+FROM t
+WHERE (a, b) = (1, 2) AND ROW(c, d) IS NOT NULL;
+
+== should format bracketed expressions ==
+SELECT (a + b) * c, ((a)) FROM t;
+
+[expect]
+SELECT (a + b) * c, ((a))
+FROM t;
+
+== should format quoted identifiers ==
+SELECT "Column Name", `other`, [bracketed] FROM "My Table";
+
+[expect]
+SELECT "Column Name", `other`, [bracketed]
+FROM "My Table";

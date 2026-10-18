@@ -1,0 +1,84 @@
+~~ dialect: postgresql ~~
+== should format a procedure ==
+CREATE OR REPLACE PROCEDURE transfer(from_id int, to_id int, amount numeric) LANGUAGE plpgsql AS $$
+BEGIN
+UPDATE accounts SET balance = balance - amount WHERE id = from_id;
+UPDATE accounts SET balance = balance + amount WHERE id = to_id;
+COMMIT;
+END;
+$$;
+
+[expect]
+CREATE OR REPLACE PROCEDURE transfer(from_id int, to_id int, amount numeric)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  UPDATE accounts
+  SET balance = balance - amount
+  WHERE id = from_id;
+  UPDATE accounts
+  SET balance = balance + amount
+  WHERE id = to_id;
+  COMMIT;
+END;
+$$;
+
+== should format call ==
+CALL transfer(1, 2, 100.00);
+
+[expect]
+CALL transfer(1, 2, 100.00);
+
+== should format a do block ==
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app') THEN CREATE ROLE app; END IF; END $$;
+
+[expect]
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app') THEN
+    CREATE ROLE app;
+  END IF;
+END
+$$;
+
+== should format a do block with a language ==
+DO LANGUAGE plpgsql $$ BEGIN RAISE NOTICE 'hi'; END $$;
+
+[expect]
+DO LANGUAGE plpgsql $$
+BEGIN
+  RAISE NOTICE 'hi';
+END
+$$;
+
+== should leave a do block in another language alone ==
+DO LANGUAGE plpython3u $$
+print(  1 )
+$$;
+
+[expect]
+DO LANGUAGE plpython3u $$
+print(  1 )
+$$;
+
+== should format a trigger ==
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+[expect]
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+== should format a rule ==
+CREATE RULE r AS ON INSERT TO t DO INSTEAD (INSERT INTO u VALUES (NEW.a); INSERT INTO v VALUES (NEW.a));
+
+[expect]
+CREATE RULE r AS ON INSERT TO t DO INSTEAD (INSERT INTO u VALUES (NEW.a); INSERT INTO v VALUES (NEW.a));
+
+== should format a cursor ==
+DECLARE c CURSOR FOR SELECT * FROM t WHERE a = 1;
+FETCH NEXT FROM c;
+CLOSE c;
+
+[expect]
+DECLARE c CURSOR FOR SELECT * FROM t WHERE a = 1;
+FETCH NEXT FROM c;
+CLOSE c;

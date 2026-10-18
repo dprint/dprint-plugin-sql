@@ -1,0 +1,47 @@
+~~ linesBetweenQueries: 2 ~~
+== should separate statements with a blank line ==
+SELECT 1; SELECT 2;
+SELECT 3;
+
+[expect]
+SELECT 1;
+
+SELECT 2;
+
+SELECT 3;
+
+== should keep a comment against the statement it introduces ==
+SELECT 1;
+-- the second
+SELECT 2;
+
+[expect]
+SELECT 1;
+
+-- the second
+SELECT 2;
+
+== should not separate statements within a block ==
+BEGIN
+SELECT 1;
+SELECT 2;
+END;
+SELECT 3;
+
+[expect]
+BEGIN
+  SELECT 1;
+  SELECT 2;
+END;
+
+SELECT 3;
+
+== should not separate a statement from the batch separator after it ==
+SELECT 1
+GO
+SELECT 2
+
+[expect]
+SELECT 1
+GO
+SELECT 2

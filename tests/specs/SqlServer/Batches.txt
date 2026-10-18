@@ -1,0 +1,131 @@
+~~ dialect: sqlserver ~~
+== should keep go on its own line ==
+SELECT 1
+GO
+SELECT 2
+GO
+
+[expect]
+SELECT 1
+GO
+SELECT 2
+GO
+
+== should format go with a count ==
+INSERT INTO t DEFAULT VALUES
+GO 10
+
+[expect]
+INSERT INTO t DEFAULT VALUES
+GO 10
+
+== should keep a comment after go ==
+SELECT 1
+GO -- end of batch
+
+[expect]
+SELECT 1
+GO -- end of batch
+
+== should keep blank lines around go ==
+SELECT 1
+
+GO
+
+SELECT 2
+
+[expect]
+SELECT 1
+
+GO
+
+SELECT 2
+
+== should read go after a semicolon as a batch separator ==
+SELECT 1; GO
+SELECT 2;
+
+[expect]
+SELECT 1;
+GO
+SELECT 2;
+
+== should format statements without semicolons ==
+DECLARE @a INT
+SET @a = 1
+SELECT @a AS a
+UPDATE t SET b = @a WHERE c = 1
+INSERT INTO t (a) VALUES (@a)
+DELETE FROM t WHERE a = @a
+EXEC dbo.p @a
+PRINT @a
+
+[expect]
+DECLARE @a INT
+SET @a = 1
+SELECT @a AS a
+UPDATE t
+SET b = @a
+WHERE c = 1
+INSERT INTO t (a)
+VALUES (@a)
+DELETE FROM t
+WHERE a = @a
+EXEC dbo.p @a
+PRINT @a
+
+== should not split statements at keywords that continue them ==
+SELECT a FROM t UNION SELECT a FROM u
+INSERT INTO t SELECT a FROM u
+UPDATE t SET a = 1 FROM t JOIN u ON u.id = t.id
+DROP TABLE IF EXISTS t
+CREATE OR ALTER VIEW v AS SELECT 1 AS a
+GRANT SELECT, UPDATE ON t TO u
+ALTER TABLE t DROP COLUMN c
+ALTER TABLE t ALTER COLUMN d INT
+SELECT * FROM t ORDER BY a OFFSET 10 ROWS FETCH NEXT 5 ROWS ONLY
+
+[expect]
+SELECT a
+FROM t
+UNION
+SELECT a
+FROM u
+INSERT INTO t
+SELECT a
+FROM u
+UPDATE t
+SET a = 1
+FROM t
+  JOIN u ON u.id = t.id
+DROP TABLE IF EXISTS t
+CREATE OR ALTER VIEW v AS
+SELECT 1 AS a
+GRANT SELECT, UPDATE ON t TO u
+ALTER TABLE t DROP COLUMN c
+ALTER TABLE t ALTER COLUMN d INT
+SELECT *
+FROM t
+ORDER BY a
+OFFSET 10 ROWS
+FETCH NEXT 5 ROWS ONLY
+
+== should keep a statement after an empty statement together ==
+;WITH cte AS (SELECT 1 AS a) SELECT a FROM cte;
+
+[expect]
+;WITH cte AS (SELECT 1 AS a)
+SELECT a
+FROM cte;
+
+== should format sqlcmd commands ==
+:setvar DatabaseName "MyDb"
+USE [$(DatabaseName)];
+:r .\other.sql
+GO
+
+[expect]
+:setvar DatabaseName "MyDb"
+USE [$(DatabaseName)];
+:r .\other.sql
+GO

@@ -122,7 +122,6 @@ const buildJob = job("build", {
         "./.github/workflows/ci.ts --lint",
         "./.github/workflows/publish_npm.ts --lint",
         "./.github/workflows/release.ts --lint",
-        "./.github/workflows/check_updates.ts --lint",
       ],
     },
   ],
