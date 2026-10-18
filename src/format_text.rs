@@ -295,6 +295,24 @@ mod test {
   }
 
   #[test]
+  fn verification_compares_line_breaks_between_strings() {
+    let config = ConfigurationBuilder::new().dialect(Dialect::PostgreSql).build();
+    let tokens = lexer::lex("SELECT 'a'\n'b'", Dialect::PostgreSql).unwrap();
+    assert!(verify(&tokens, "SELECT\n  'a'\n  'b'", &config).is_ok());
+    assert!(verify(&tokens, "SELECT 'a' 'b'", &config).is_err());
+  }
+
+  #[test]
+  fn verification_compares_template_tags_in_place() {
+    let config = ConfigurationBuilder::new().build();
+    let tokens = lexer::lex("SELECT a\n{% if x %}\n, b\n{% endif %}", Dialect::Generic).unwrap();
+    // a tag may move onto or off a line of its own
+    assert!(verify(&tokens, "SELECT a {% if x %}, b\n{% endif %}", &config).is_ok());
+    // but not across the code around it
+    assert!(verify(&tokens, "SELECT a,\n{% if x %}\nb\n{% endif %}", &config).is_err());
+  }
+
+  #[test]
   fn verification_compares_routine_bodies_as_code() {
     let config = ConfigurationBuilder::new().dialect(Dialect::PostgreSql).build();
     let tokens = lexer::lex("DO $$ BEGIN   NULL; END $$", Dialect::PostgreSql).unwrap();

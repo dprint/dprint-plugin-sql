@@ -37,9 +37,9 @@ END;
 SELECT 3;
 
 == should not separate a statement from the batch separator after it ==
-SELECT 1
+SELECT   1
 GO
-SELECT 2
+SELECT   2
 
 [expect]
 SELECT 1

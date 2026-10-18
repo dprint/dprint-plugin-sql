@@ -100,7 +100,7 @@ BEGIN
 END;
 
 == should format call ==
-CALL dataset.p(1, y);
+CALL   dataset.p(1 ,   y);
 
 [expect]
 CALL dataset.p(1, y);
@@ -147,3 +147,17 @@ SELECT r'\'' AS a, `a\`b` FROM t;
 [expect]
 SELECT r'\'' AS a, `a\`b`
 FROM t;
+
+== should format select as struct ==
+SELECT  AS  STRUCT 1 AS a, 2 AS b;
+
+[expect]
+SELECT AS STRUCT 1 AS a, 2 AS b;
+
+== should end a select list in a trailing comma ==
+SELECT a, b, FROM t WHERE x = 1;
+
+[expect]
+SELECT a, b,
+FROM t
+WHERE x = 1;

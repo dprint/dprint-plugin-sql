@@ -173,3 +173,24 @@ WITH active_users AS (
 )
 SELECT *
 FROM active_users;
+
+== should break conditions around a between ==
+SELECT * FROM t WHERE a BETWEEN 1 AND 2 AND b = 1 OR c NOT BETWEEN x AND y;
+
+[expect]
+SELECT *
+FROM t
+WHERE a BETWEEN 1 AND 2
+  AND b = 1
+  OR c NOT BETWEEN x AND y;
+
+== should keep the branches of a case after an operand that breaks ==
+SELECT COUNT(CASE DATALENGTH(chr.[UTF8_value_column]) WHEN 1 THEN 'x' END) AS b FROM t;
+
+[expect]
+SELECT COUNT(
+  CASE DATALENGTH(
+    chr.[UTF8_value_column]
+  ) WHEN 1 THEN 'x' END
+) AS b
+FROM t;

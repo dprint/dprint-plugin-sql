@@ -1,0 +1,21 @@
+~~ dialect: postgresql ~~
+== should format the whole function the range is in ==
+select   1;
+CREATE FUNCTION f() RETURNS int AS $$
+BEGIN
+RETURN   [|2|];
+END
+$$ LANGUAGE plpgsql;
+select   3;
+
+[expect]
+select   1;
+CREATE FUNCTION f()
+RETURNS int
+AS $$
+BEGIN
+  RETURN 2;
+END
+$$
+LANGUAGE plpgsql;
+select   3;

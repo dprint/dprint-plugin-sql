@@ -20,9 +20,9 @@ SELECT *
 FROM #temp;
 
 == should read go as a batch separator ==
-SELECT 1
+SELECT   1
 GO
-SELECT 2
+SELECT   2
 
 [expect]
 SELECT 1
@@ -59,9 +59,9 @@ SELECT $$text$$;
 SELECT $$text$$;
 
 == should format t-sql without semicolons ==
-DECLARE @a INT
-SET @a = 1
-SELECT @a
+DECLARE   @a   INT
+SET   @a   =   1
+SELECT   @a
 
 [expect]
 DECLARE @a INT

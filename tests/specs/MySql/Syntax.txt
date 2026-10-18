@@ -40,8 +40,7 @@ SELECT "text" AS a;
 SELECT "text" AS a;
 
 == should format user variables ==
-SET @a := 1, @b = 2;
-SELECT @a + @b, @@session.sql_mode, @@global.max_connections;
+SET @a := 1, @b = 2; SELECT @a + @b, @@session.sql_mode, @@global.max_connections;
 
 [expect]
 SET @a := 1, @b = 2;
@@ -102,7 +101,7 @@ CREATE TABLE `t` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 == should format alter table ==
-ALTER TABLE t ADD COLUMN c INT AFTER b, DROP INDEX idx, MODIFY COLUMN d TEXT;
+ALTER   TABLE   t   ADD   COLUMN   c   INT   AFTER   b ,   DROP   INDEX   idx ,   MODIFY   COLUMN   d   TEXT;
 
 [expect]
 ALTER TABLE t ADD COLUMN c INT AFTER b, DROP INDEX idx, MODIFY COLUMN d TEXT;
@@ -145,3 +144,24 @@ SELECT *
 FROM t
 WHERE x = @v # note
   AND y = 1;
+
+== should format a lock in share mode ==
+SELECT * FROM t WHERE a = 1 LOCK IN SHARE MODE;
+
+[expect]
+SELECT *
+FROM t
+WHERE a = 1
+LOCK IN SHARE MODE;
+
+== should keep an executable comment against the value after it ==
+INSERT INTO t VALUES (1,'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',/*!50705 0x0000000001010000003E0A325D63345CC0761FDB8D99D94840,*/'2014-09-25');
+
+[expect]
+INSERT INTO t
+VALUES (
+  1,
+  'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+  /*!50705 0x0000000001010000003E0A325D63345CC0761FDB8D99D94840,*/'2014-09-25'
+);

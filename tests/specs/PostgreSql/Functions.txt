@@ -379,3 +379,17 @@ BEGIN
 END;
 $$
 LANGUAGE plpgsql;
+
+== should keep a body that's empty or can't be formatted as it is ==
+CREATE FUNCTION f() RETURNS int AS $$ $$ LANGUAGE sql;
+CREATE FUNCTION g() RETURNS int AS $$ SELECT ( $$ LANGUAGE sql;
+
+[expect]
+CREATE FUNCTION f()
+RETURNS int
+AS $$ $$
+LANGUAGE sql;
+CREATE FUNCTION g()
+RETURNS int
+AS $$ SELECT ( $$
+LANGUAGE sql;

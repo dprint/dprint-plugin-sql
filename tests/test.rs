@@ -25,6 +25,16 @@ fn should_keep_windows_newlines_in_auto_mode() {
 }
 
 #[test]
+fn should_write_crlf_newlines() {
+  let config = ConfigurationBuilder::new()
+    .new_line_kind(dprint_core::configuration::NewLineKind::CarriageReturnLineFeed)
+    .build();
+  let file_text = format_text(&PathBuf::from("file.sql"), "SELECT * FROM  dbo.Test\n", &config).unwrap();
+
+  assert_eq!(file_text.unwrap(), "SELECT *\r\nFROM dbo.Test\r\n");
+}
+
+#[test]
 fn should_format_empty_file() {
   let config = ConfigurationBuilder::new().build();
   assert_eq!(format_text(&PathBuf::from("file.sql"), "", &config).unwrap(), None);

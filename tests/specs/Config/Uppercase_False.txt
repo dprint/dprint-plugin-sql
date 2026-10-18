@@ -1,0 +1,8 @@
+~~ uppercase: false ~~
+== should preserve casing when the legacy uppercase option is false ==
+select a FROM t Where b = 1;
+
+[expect]
+select a
+FROM t
+Where b = 1;

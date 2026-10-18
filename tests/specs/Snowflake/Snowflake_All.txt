@@ -127,3 +127,25 @@ FROM @%t;
 PUT file:///tmp/x.csv @~/staged;
 LIST @my_stage/data/2024/;
 REMOVE @%mytable/old;
+
+== should end a select list in a trailing comma ==
+SELECT a, b, FROM t;
+
+[expect]
+SELECT a, b,
+FROM t;
+
+== should format a match recognize ==
+SELECT * FROM t MATCH_RECOGNIZE (PARTITION BY a ORDER BY b MEASURES c AS d ONE ROW PER MATCH AFTER MATCH SKIP PAST LAST ROW PATTERN (A B*) DEFINE B AS b > 1);
+
+[expect]
+SELECT *
+FROM t MATCH_RECOGNIZE (
+  PARTITION BY a
+  ORDER BY b
+  MEASURES c AS d
+  ONE ROW PER MATCH
+  AFTER MATCH SKIP PAST LAST ROW
+  PATTERN (A B*)
+  DEFINE B AS b > 1
+);

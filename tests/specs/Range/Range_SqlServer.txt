@@ -1,0 +1,38 @@
+~~ dialect: sqlserver ~~
+== should format only the batch statement the range is in ==
+select   1
+GO
+select   [|2|]
+GO
+select   3
+
+[expect]
+select   1
+GO
+select 2
+GO
+select   3
+
+== should format the whole procedure the range is in ==
+select   1
+GO
+CREATE PROCEDURE p AS
+BEGIN
+select   [|2|]
+IF @a = 1 PRINT   3
+END
+GO
+select   4
+
+[expect]
+select   1
+GO
+CREATE PROCEDURE p
+AS
+BEGIN
+  select 2
+  IF @a = 1
+    PRINT 3
+END
+GO
+select   4

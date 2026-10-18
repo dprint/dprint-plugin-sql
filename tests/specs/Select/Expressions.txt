@@ -193,3 +193,17 @@ SELECT "Column Name", `other`, [bracketed] FROM "My Table";
 [expect]
 SELECT "Column Name", `other`, [bracketed]
 FROM "My Table";
+
+== should keep number literals as they are ==
+SELECT 0b101, 0o17, 0x1F, 1e5, 1.5e-3, 1_000 FROM t;
+
+[expect]
+SELECT 0b101, 0o17, 0x1F, 1e5, 1.5e-3, 1_000
+FROM t;
+
+== should keep a percent against the word after it ==
+SELECT%x, a % b, a%b FROM t;
+
+[expect]
+SELECT %x, a % b, a%b
+FROM t;

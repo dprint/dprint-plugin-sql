@@ -1,0 +1,8 @@
+~~ uppercase: true, casing: lower ~~
+== should prefer casing over the legacy uppercase option ==
+select a FROM t Where b = 1;
+
+[expect]
+select a
+from t
+where b = 1;

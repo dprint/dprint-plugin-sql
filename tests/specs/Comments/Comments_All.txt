@@ -1,8 +1,8 @@
 == should keep comments between statements ==
 -- first
-SELECT 1;
+SELECT   1;
 /* second */
-SELECT 2;
+SELECT   2;
 
 [expect]
 -- first
@@ -193,7 +193,7 @@ CREATE TABLE t (
 );
 
 == should keep a comment at the end of the file ==
-SELECT 1;
+SELECT   1;
 -- the end
 
 [expect]
@@ -231,3 +231,26 @@ group by a
 having
   -- why
   count(*) > 1;
+
+== should keep a comment after the last item of a list ==
+SELECT a,
+  b
+  -- after the last
+FROM t;
+
+[expect]
+SELECT a, b
+-- after the last
+FROM t;
+
+== should keep a comment after an opening bracket ==
+SELECT f( -- c
+  a, b) FROM t;
+
+[expect]
+SELECT f(
+  -- c
+  a,
+  b
+)
+FROM t;

@@ -107,3 +107,12 @@ SELECT LEFT(name, 3) FROM a LEFT JOIN b ON a.id = b.id;
 SELECT LEFT(name, 3)
 FROM a
   LEFT JOIN b ON a.id = b.id;
+
+== should format lateral views ==
+SELECT * FROM t LATERAL VIEW OUTER explode(a) x AS y LATERAL VIEW explode(b) z;
+
+[expect]
+SELECT *
+FROM t
+  LATERAL VIEW OUTER explode(a) x AS y
+  LATERAL VIEW explode(b) z;

@@ -24,7 +24,7 @@ END;
 $$;
 
 == should format call ==
-CALL transfer(1, 2, 100.00);
+CALL   transfer(1 ,   2 ,   100.00);
 
 [expect]
 CALL transfer(1, 2, 100.00);
@@ -62,23 +62,50 @@ print(  1 )
 $$;
 
 == should format a trigger ==
-CREATE TRIGGER set_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE   TRIGGER   set_updated_at   BEFORE   UPDATE   ON   users   FOR   EACH   ROW   EXECUTE   FUNCTION   set_updated_at();
 
 [expect]
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 == should format a rule ==
-CREATE RULE r AS ON INSERT TO t DO INSTEAD (INSERT INTO u VALUES (NEW.a); INSERT INTO v VALUES (NEW.a));
+CREATE   RULE   r   AS   ON   INSERT   TO   t   DO   INSTEAD   (INSERT   INTO   u   VALUES   (NEW.a);   INSERT   INTO   v   VALUES   (NEW.a));
 
 [expect]
 CREATE RULE r AS ON INSERT TO t DO INSTEAD (INSERT INTO u VALUES (NEW.a); INSERT INTO v VALUES (NEW.a));
 
 == should format a cursor ==
-DECLARE c CURSOR FOR SELECT * FROM t WHERE a = 1;
-FETCH NEXT FROM c;
-CLOSE c;
+DECLARE c CURSOR FOR SELECT * FROM t WHERE a = 1; FETCH NEXT FROM c; CLOSE c;
 
 [expect]
 DECLARE c CURSOR FOR SELECT * FROM t WHERE a = 1;
 FETCH NEXT FROM c;
 CLOSE c;
+
+== should keep a comment at the start of an exception section ==
+DO $$ BEGIN
+  NULL;
+EXCEPTION
+  -- handle it
+  WHEN others THEN NULL;
+END $$;
+
+[expect]
+DO $$
+BEGIN
+  NULL;
+EXCEPTION
+  -- handle it
+  WHEN others THEN
+    NULL;
+END
+$$;
+
+== should leave a case statement without an end as statements ==
+DO $$ BEGIN CASE x WHEN 1 THEN NULL; END; $$;
+
+[expect]
+DO $$
+BEGIN
+  CASE x WHEN 1 THEN NULL;
+END;
+$$;

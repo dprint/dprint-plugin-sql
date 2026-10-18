@@ -102,3 +102,11 @@ SELECT * FROM t WHERE a = ANY(SELECT a FROM u) OR b > ALL (SELECT b FROM u);
 SELECT *
 FROM t
 WHERE a = ANY(SELECT a FROM u) OR b > ALL (SELECT b FROM u);
+
+== should keep the alias of a subquery after its brackets ==
+select * from (select a from t) as x join (select b from u) y on x.a = y.b;
+
+[expect]
+select *
+from (select a from t) as x
+  join (select b from u) y on x.a = y.b;

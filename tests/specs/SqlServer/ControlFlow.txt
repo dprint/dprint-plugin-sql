@@ -134,11 +134,7 @@ WAITFOR DELAY '00:00:05';
 RAISERROR('failed: %s', 16, 1, @msg) WITH NOWAIT;
 
 == should format transactions ==
-BEGIN TRAN;
-BEGIN TRANSACTION t1;
-COMMIT TRAN;
-ROLLBACK TRANSACTION t1;
-SAVE TRANSACTION s;
+BEGIN TRAN; BEGIN TRANSACTION t1; COMMIT TRAN; ROLLBACK TRANSACTION t1; SAVE TRANSACTION s;
 
 [expect]
 BEGIN TRAN;
@@ -204,3 +200,17 @@ IF @x IS NULL
   RETURN
 SELECT *
 FROM t
+
+== should keep a comment before an else ==
+IF @a = 1
+PRINT 1
+-- otherwise
+ELSE
+PRINT 2
+
+[expect]
+IF @a = 1
+  PRINT 1
+-- otherwise
+ELSE
+  PRINT 2

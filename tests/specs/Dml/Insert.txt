@@ -29,7 +29,7 @@ FROM u
 WHERE c = 1;
 
 == should format default values ==
-INSERT INTO t DEFAULT VALUES;
+INSERT   INTO   t   DEFAULT   VALUES;
 
 [expect]
 INSERT INTO t DEFAULT VALUES;
@@ -70,8 +70,8 @@ RETURNING id, a;
 
 == should format an insert written over several lines ==
 INSERT INTO t (
-  a,
-  b
+a,
+b
 )
 VALUES (1, 2);
 

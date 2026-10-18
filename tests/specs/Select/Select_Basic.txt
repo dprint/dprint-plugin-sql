@@ -20,7 +20,7 @@ limit 10
 offset 5;
 
 == should keep a select without a from on one line ==
-SELECT 1;
+SELECT   1;
 
 [expect]
 SELECT 1;
@@ -85,8 +85,7 @@ SELECT 2;
 SELECT 3
 
 == should keep statements without semicolons apart ==
-SELECT 1;
-SELECT 2
+SELECT 1; SELECT 2
 
 [expect]
 SELECT 1;
@@ -194,7 +193,7 @@ FROM t
 QUALIFY rn = 1;
 
 == should format a table statement ==
-TABLE users;
+TABLE   users;
 
 [expect]
 TABLE users;

@@ -147,3 +147,21 @@ EXECUTE dbms_stats.gather_schema_stats( -
         cascade => TRUE);
 SELECT 1
 FROM dual;
+
+== should read quoted strings with bracket delimiters ==
+SELECT q'<a>b>', q'{x}y}', q'(z)' FROM dual;
+
+[expect]
+SELECT q'<a>b>', q'{x}y}', q'(z)'
+FROM dual;
+
+== should not read a set statement as a sql plus command once it's formatted ==
+SET AUTOCOMMIT=0;
+SET define=off
+UPDATE t SET a=1;
+
+[expect]
+SET AUTOCOMMIT=0;
+SET define=off
+UPDATE t
+SET a = 1;

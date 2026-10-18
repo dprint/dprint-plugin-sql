@@ -34,19 +34,19 @@ SELECT x
 FROM a;
 
 == should format a create index ==
-CREATE UNIQUE INDEX IF NOT EXISTS idx ON t (a, b DESC) WHERE c IS NULL;
+CREATE   UNIQUE   INDEX   IF   NOT   EXISTS   idx   ON   t   (a ,   b   DESC)   WHERE   c   IS   NULL;
 
 [expect]
 CREATE UNIQUE INDEX IF NOT EXISTS idx ON t (a, b DESC) WHERE c IS NULL;
 
 == should format an alter table with one action ==
-ALTER TABLE t ADD COLUMN c INT NOT NULL DEFAULT 0;
+ALTER   TABLE   t   ADD   COLUMN   c   INT   NOT   NULL   DEFAULT   0;
 
 [expect]
 ALTER TABLE t ADD COLUMN c INT NOT NULL DEFAULT 0;
 
 == should format an alter table with several actions ==
-ALTER TABLE t ADD COLUMN c INT, DROP COLUMN d;
+ALTER   TABLE   t   ADD   COLUMN   c   INT ,   DROP   COLUMN   d;
 
 [expect]
 ALTER TABLE t ADD COLUMN c INT, DROP COLUMN d;
@@ -69,21 +69,19 @@ ADD CONSTRAINT fk FOREIGN KEY (a) REFERENCES u (id)
 ALTER TABLE t ADD CONSTRAINT fk FOREIGN KEY (a) REFERENCES u (id)
 
 == should format alter column ==
-ALTER TABLE t ALTER COLUMN a SET DEFAULT 1, ALTER COLUMN b TYPE TEXT;
+ALTER   TABLE   t   ALTER   COLUMN   a   SET   DEFAULT   1 ,   ALTER   COLUMN   b   TYPE   TEXT;
 
 [expect]
 ALTER TABLE t ALTER COLUMN a SET DEFAULT 1, ALTER COLUMN b TYPE TEXT;
 
 == should format rename ==
-ALTER TABLE t RENAME COLUMN a TO b;
+ALTER   TABLE   t   RENAME   COLUMN   a   TO   b;
 
 [expect]
 ALTER TABLE t RENAME COLUMN a TO b;
 
 == should format drops ==
-DROP TABLE IF EXISTS a, b CASCADE;
-DROP VIEW v;
-DROP INDEX idx;
+DROP TABLE IF EXISTS a, b CASCADE; DROP VIEW v; DROP INDEX idx;
 
 [expect]
 DROP TABLE IF EXISTS a, b CASCADE;
@@ -91,27 +89,26 @@ DROP VIEW v;
 DROP INDEX idx;
 
 == should format truncate ==
-TRUNCATE TABLE t RESTART IDENTITY;
+TRUNCATE   TABLE   t   RESTART   IDENTITY;
 
 [expect]
 TRUNCATE TABLE t RESTART IDENTITY;
 
 == should format grants ==
-GRANT SELECT, INSERT ON t TO u WITH GRANT OPTION;
-REVOKE ALL ON t FROM u;
+GRANT SELECT, INSERT ON t TO u WITH GRANT OPTION; REVOKE ALL ON t FROM u;
 
 [expect]
 GRANT SELECT, INSERT ON t TO u WITH GRANT OPTION;
 REVOKE ALL ON t FROM u;
 
 == should format a create schema ==
-CREATE SCHEMA IF NOT EXISTS app AUTHORIZATION admin;
+CREATE   SCHEMA   IF   NOT   EXISTS   app   AUTHORIZATION   admin;
 
 [expect]
 CREATE SCHEMA IF NOT EXISTS app AUTHORIZATION admin;
 
 == should format a create sequence ==
-CREATE SEQUENCE s START WITH 1 INCREMENT BY 1;
+CREATE   SEQUENCE   s   START   WITH   1   INCREMENT   BY   1;
 
 [expect]
 CREATE SEQUENCE s START WITH 1 INCREMENT BY 1;
@@ -129,13 +126,13 @@ CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 
 == should format a create domain ==
-CREATE DOMAIN positive AS INT CHECK (VALUE > 0);
+CREATE   DOMAIN   positive   AS   INT   CHECK   (VALUE   >   0);
 
 [expect]
 CREATE DOMAIN positive AS INT CHECK (VALUE > 0);
 
 == should format a create extension ==
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE   EXTENSION   IF   NOT   EXISTS   pgcrypto;
 
 [expect]
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
