@@ -153,3 +153,15 @@ SELECT *
 FROM t
 WHERE a = 1
 LOCK IN SHARE MODE;
+
+== should keep an executable comment against the value after it ==
+INSERT INTO t VALUES (1,'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',/*!50705 0x0000000001010000003E0A325D63345CC0761FDB8D99D94840,*/'2014-09-25');
+
+[expect]
+INSERT INTO t
+VALUES (
+  1,
+  'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+  /*!50705 0x0000000001010000003E0A325D63345CC0761FDB8D99D94840,*/'2014-09-25'
+);

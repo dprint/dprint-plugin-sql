@@ -2023,9 +2023,10 @@ fn case_forces_multi_line(case: &Case) -> bool {
     .branches
     .first()
     .map(|b| b.leading_comments.first().copied().unwrap_or(b.when));
+  // not the operand, which comes before the branches whatever they do, and which the line width
+  // may have broken (ex. `CASE f(` then `a` then `) WHEN 1 ..`)
   first_branch_token.is_some_and(|t| t.newlines_before > 0)
     || !case.end_comments.is_empty()
-    || is_known_multi_line(&case.operand)
     || case
       .branches
       .iter()
@@ -2317,7 +2318,9 @@ fn needs_space(elements: &[Element], i: usize) -> bool {
   if let Some(operator) = previous.as_token().filter(|t| t.kind == TokenKind::Operator) {
     return match operator.text {
       "::" => false,
-      "%" if is_attribute_operator(elements, i - 1) => false,
+      // a `%` against the word after it stays against it, wherever it is, since the space before
+      // it may be one the formatter wrote (ex. after `SELECT`)
+      "%" if next.is_kind(TokenKind::Word) && !next_first.space_before => false,
       ":" | ".." => next_first.space_before,
       // a `*` where a unary operator would be is a wildcard (ex. `SELECT *`)
       "*" => true,
@@ -2448,7 +2451,10 @@ fn gen_leading_comments(comments: &[Tok], next: Option<Tok>) -> PrintItems {
     items.extend(gen_comment(comment));
     let following = comments.get(i + 1).copied().or(next);
     if !comment.is_line_comment() && following.is_some_and(|t| t.newlines_before == 0) {
-      items.push_space();
+      // a block comment against what follows stays against it (ex. MySQL's `/*!50705 x,*/'a'`)
+      if following.is_some_and(|t| t.space_before) {
+        items.push_space();
+      }
     } else {
       items.push_signal(Signal::NewLine);
     }

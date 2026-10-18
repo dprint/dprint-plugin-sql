@@ -1308,7 +1308,9 @@ fn is_sql_plus_command(first_word: &str, rest: &str) -> bool {
     return true;
   }
   if first_word.eq_ignore_ascii_case("set") {
-    let option = rest.split_whitespace().next().unwrap_or("");
+    // the option's name ends wherever a name can't continue, since the formatter may put a space
+    // there (ex. `SET AUTOCOMMIT=0` becoming `SET AUTOCOMMIT = 0`)
+    let option = &rest[..rest.find(|c: char| !is_ident_char(c)).unwrap_or(rest.len())];
     return SET_OPTIONS.iter().any(|o| o.eq_ignore_ascii_case(option));
   }
   // `EXEC p` runs a procedure, while `EXECUTE IMMEDIATE` is only in PL/SQL

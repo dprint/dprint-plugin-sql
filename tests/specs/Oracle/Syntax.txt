@@ -154,3 +154,14 @@ SELECT q'<a>b>', q'{x}y}', q'(z)' FROM dual;
 [expect]
 SELECT q'<a>b>', q'{x}y}', q'(z)'
 FROM dual;
+
+== should not read a set statement as a sql plus command once it's formatted ==
+SET AUTOCOMMIT=0;
+SET define=off
+UPDATE t SET a=1;
+
+[expect]
+SET AUTOCOMMIT=0;
+SET define=off
+UPDATE t
+SET a = 1;
