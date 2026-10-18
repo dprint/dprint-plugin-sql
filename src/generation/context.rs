@@ -9,6 +9,9 @@ pub struct Context<'a> {
   /// Where the dollar-quoted strings start that hold the code of a routine (ex. the body of a
   /// PL/pgSQL function), which is formatted as SQL too.
   pub code_bodies: HashSet<usize>,
+  /// Where the name of a table starts that the clause being written begins with (ex. the `view`
+  /// of `FROM view`).
+  pub table_name_start: Option<usize>,
 }
 
 impl<'a> Context<'a> {
@@ -17,6 +20,7 @@ impl<'a> Context<'a> {
       config,
       text,
       code_bodies: HashSet::new(),
+      table_name_start: None,
     }
   }
 }

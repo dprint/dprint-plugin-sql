@@ -113,3 +113,18 @@ SELECT * FROM t FOR SYSTEM_TIME AS OF '2020-01-01' WHERE a = 1;
 SELECT *
 FROM t FOR SYSTEM_TIME AS OF '2020-01-01'
 WHERE a = 1;
+
+== should end an operator before a sign ==
+SELECT * FROM t WHERE x!=-1 AND y%-2=0 AND z|-1=0;
+
+[expect]
+SELECT *
+FROM t
+WHERE x != -1 AND y % -2 = 0 AND z | -1 = 0;
+
+== should keep a column named like a clause in a list ==
+SELECT id, offset, filter, identity FROM t;
+
+[expect]
+SELECT id, offset, filter, identity
+FROM t;

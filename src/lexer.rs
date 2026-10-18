@@ -120,6 +120,7 @@ pub fn lex(text: &str, dialect: Dialect) -> Result<Vec<Token<'_>>, LexError> {
     space: false,
     line_start: true,
     open_brackets: 0,
+    last_significant: None,
   };
   lexer.run()?;
   Ok(lexer.tokens)
@@ -138,6 +139,8 @@ struct Lexer<'a> {
   line_start: bool,
   /// How many `[` that aren't quoted identifiers are open.
   open_brackets: i32,
+  /// The kind of the last token that isn't a comment.
+  last_significant: Option<TokenKind>,
 }
 
 impl<'a> Lexer<'a> {
@@ -231,6 +234,12 @@ impl<'a> Lexer<'a> {
       TokenKind::CloseBracket => self.open_brackets -= 1,
       _ => {}
     }
+    if !matches!(
+      kind,
+      TokenKind::LineComment | TokenKind::BlockComment | TokenKind::TemplateLine
+    ) {
+      self.last_significant = Some(kind);
+    }
     self.tokens.push(Token {
       kind,
       text: &self.text[start..self.pos],
@@ -250,7 +259,7 @@ impl<'a> Lexer<'a> {
           self.newlines += 1;
           self.line_start = true;
         }
-        c if c.is_whitespace() => self.space = true,
+        ' ' | '\t' | '\r' | '\x0b' | '\x0c' => self.space = true,
         _ => return,
       }
       self.pos += c.len_utf8();
@@ -283,7 +292,7 @@ impl<'a> Lexer<'a> {
       '#' => Ok(self.hash()),
       '\'' => self.string(1, self.backslash_escapes()),
       '"' => self.double_quoted(),
-      '`' => self.quoted('`', TokenKind::QuotedIdent, false),
+      '`' => self.quoted('`', TokenKind::QuotedIdent, self.dialect == Dialect::BigQuery),
       '[' => self.open_bracket(),
       ']' => Ok(self.single(TokenKind::CloseBracket)),
       '{' => self.open_brace(),
@@ -398,17 +407,12 @@ impl<'a> Lexer<'a> {
 
   /// Whether the previous token ends a statement, so that what's next can't be part of one.
   fn is_between_statements(&self) -> bool {
-    self
-      .tokens
-      .iter()
-      .rev()
-      .find(|token| !token.is_comment())
-      .is_none_or(|token| {
-        matches!(
-          token.kind,
-          TokenKind::Semicolon | TokenKind::Delimiter | TokenKind::Directive | TokenKind::BatchSeparator
-        )
-      })
+    self.last_significant.is_none_or(|kind| {
+      matches!(
+        kind,
+        TokenKind::Semicolon | TokenKind::Delimiter | TokenKind::Directive | TokenKind::BatchSeparator
+      )
+    })
   }
 
   /// The delimiter a `DELIMITER` command sets, from the text that follows the word.
@@ -502,17 +506,12 @@ impl<'a> Lexer<'a> {
   /// Whether the previous token leaves its statement wanting more, such that a `#name` on the
   /// next line is more likely a temporary table's name than a comment.
   fn previous_continues_onto_next_line(&self) -> bool {
-    self
-      .tokens
-      .iter()
-      .rev()
-      .find(|token| !token.is_comment())
-      .is_some_and(|token| {
-        matches!(
-          token.kind,
-          TokenKind::Word | TokenKind::Comma | TokenKind::OpenParen | TokenKind::Dot
-        )
-      })
+    self.last_significant.is_some_and(|kind| {
+      matches!(
+        kind,
+        TokenKind::Word | TokenKind::Comma | TokenKind::OpenParen | TokenKind::Dot
+      )
+    })
   }
 
   // ---- strings and quoted identifiers ----
@@ -710,6 +709,19 @@ impl<'a> Lexer<'a> {
     if self.dialect == Dialect::PostgreSql {
       return self.operator();
     }
+    // a Snowflake stage and the path in it (ex. `@my_stage/path/file.csv`, `@~` or `@%table`)
+    if self.dialect == Dialect::Snowflake
+      && self
+        .peek_at(1)
+        .is_some_and(|c| c == '~' || c == '%' || is_ident_start(c))
+    {
+      self.pos += 1;
+      self.pos += self
+        .rest()
+        .find(|c: char| c.is_ascii_whitespace() || matches!(c, ',' | ';' | '(' | ')' | '\''))
+        .unwrap_or(self.rest().len());
+      return TokenKind::Variable;
+    }
     let start = self.pos;
     let mut i = start + 1;
     if self.text[i..].starts_with('@') {
@@ -883,6 +895,19 @@ impl<'a> Lexer<'a> {
     let word = &self.text[start..self.pos];
     let next = self.peek();
 
+    if next == Some('-') && self.dialect == Dialect::BigQuery {
+      self.eat_bigquery_dashed_name();
+      if self.pos > start + word.len() {
+        return Ok(TokenKind::Word);
+      }
+    }
+    // a file's URL in a Snowflake `PUT` or `GET` (ex. `file:///tmp/data.csv`), whose `//` would
+    // otherwise start a comment
+    if self.dialect == Dialect::Snowflake && word.eq_ignore_ascii_case("file") && self.rest().starts_with("://") {
+      self.eat_until_space();
+      return Ok(TokenKind::Word);
+    }
+
     // a prefix written directly against the quote of the string or identifier it modifies
     if next == Some('\'') {
       let prefix_len = word.len() + 1;
@@ -898,16 +923,16 @@ impl<'a> Lexer<'a> {
         self.pos = start;
         return self.string(prefix_len, self.backslash_escapes());
       } else if self.dialect == Dialect::BigQuery && is_bigquery_string_prefix(word) {
+        // a backslash in a raw string isn't an escape, but still keeps the quote after it from
+        // ending the string (ex. `r'\''`)
         self.pos = start;
-        let raw = word.contains(['r', 'R']);
-        return self.string(prefix_len, !raw);
+        return self.string(prefix_len, true);
       }
     } else if next == Some('"') && self.dialect == Dialect::BigQuery && is_bigquery_string_prefix(word) {
-      let raw = word.contains(['r', 'R']);
       if self.rest().starts_with("\"\"\"") {
         return self.triple_quoted(start, self.pos, "\"\"\"");
       }
-      return self.quoted_from(start, '"', TokenKind::String, !raw);
+      return self.quoted_from(start, '"', TokenKind::String, true);
     } else if next == Some('&') && word.eq_ignore_ascii_case("u") {
       // a unicode escaped string or identifier (`U&'..'` or `U&".."`)
       match self.peek_at(1) {
@@ -923,6 +948,46 @@ impl<'a> Lexer<'a> {
       }
     }
     Ok(TokenKind::Word)
+  }
+
+  /// The rest of a BigQuery name holding dashes (ex. `my-project.dataset.table`), which is only
+  /// taken as a name where it's in the path of a table, since `a-b` is otherwise a subtraction.
+  fn eat_bigquery_dashed_name(&mut self) {
+    let mut end = self.pos;
+    while self.text[end..].starts_with('-')
+      && self.text[end + 1..].starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_')
+    {
+      end += 1;
+      end += self.text[end..]
+        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .unwrap_or(self.text.len() - end);
+    }
+    if end == self.pos {
+      return;
+    }
+    let rest = &self.text[end..];
+    let is_name = (rest.starts_with('.') && rest[1..].starts_with(is_ident_start))
+      || self.last_significant == Some(TokenKind::Dot)
+      || self
+        .tokens
+        .iter()
+        .rev()
+        .find(|token| !token.is_comment())
+        .is_some_and(|token| {
+          ["FROM", "JOIN", "INTO", "TABLE", "UPDATE"]
+            .iter()
+            .any(|word| token.is_word(word))
+        });
+    if is_name {
+      self.pos = end;
+    }
+  }
+
+  fn eat_until_space(&mut self) {
+    self.pos += self
+      .rest()
+      .find(|c: char| c.is_ascii_whitespace())
+      .unwrap_or(self.rest().len());
   }
 
   fn eat_ident_chars(&mut self) {
@@ -946,7 +1011,14 @@ impl<'a> Lexer<'a> {
 
   fn eat_variable_chars(&mut self) {
     while let Some(c) = self.peek() {
-      if is_ident_char(c) || c == '#' {
+      // `#` starts a comment in MySQL and BigQuery, and in the generic dialect when whitespace
+      // follows it
+      let allows_hash = match self.dialect {
+        Dialect::SqlServer | Dialect::Oracle => true,
+        Dialect::Generic => self.peek_at(1).is_some_and(is_ident_char),
+        _ => false,
+      };
+      if is_ident_char(c) || (allows_hash && c == '#') {
         self.pos += c.len_utf8();
       } else {
         break;
@@ -1043,9 +1115,11 @@ impl<'a> Lexer<'a> {
       end = start + self.peek().unwrap().len_utf8();
     }
     // like PostgreSQL, an operator can't end in `+` or `-` unless it holds one of the characters
-    // that only operators use, so `=-1` is `=` followed by `-1`
+    // that only operators use, so `=-1` is `=` followed by `-1`, and no other dialect has an
+    // operator ending in either
     let mut text = &self.text[start..end];
-    if !text.contains(['~', '!', '@', '#', '%', '^', '&', '|', '`', '?']) {
+    let is_postgres = matches!(self.dialect, Dialect::PostgreSql | Dialect::Generic);
+    if !is_postgres || !text.contains(['~', '!', '@', '#', '%', '^', '&', '|', '`', '?']) {
       while text.len() > 1 && text.ends_with(['+', '-']) {
         text = &text[..text.len() - 1];
       }
@@ -1218,12 +1292,18 @@ fn is_sql_plus_command(first_word: &str, rest: &str) -> bool {
   COMMANDS.iter().any(|c| c.eq_ignore_ascii_case(first_word))
 }
 
+/// Whether `c` can start an identifier. Whitespace beyond ASCII is part of an identifier in
+/// PostgreSQL and MySQL, so it's kept with the text around it rather than taken as a space.
 pub fn is_ident_start(c: char) -> bool {
-  c.is_alphabetic() || c == '_'
+  c.is_alphabetic() || c == '_' || is_unicode_space(c)
 }
 
 pub fn is_ident_char(c: char) -> bool {
-  c.is_alphanumeric() || c == '_' || c == '$'
+  c.is_alphanumeric() || c == '_' || c == '$' || is_unicode_space(c)
+}
+
+fn is_unicode_space(c: char) -> bool {
+  !c.is_ascii() && c.is_whitespace()
 }
 
 fn is_operator_char(c: char) -> bool {

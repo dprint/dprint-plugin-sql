@@ -135,3 +135,13 @@ FROM t;
 
 [expect]
 /*!40101 SET NAMES utf8 */;
+
+== should end a variable's name at a comment ==
+SELECT * FROM t WHERE x = @v# note
+  AND y = 1;
+
+[expect]
+SELECT *
+FROM t
+WHERE x = @v # note
+  AND y = 1;

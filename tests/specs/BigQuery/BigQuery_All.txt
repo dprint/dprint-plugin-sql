@@ -121,3 +121,29 @@ SELECT * FROM t WHERE a = @a AND b = @@project_id;
 SELECT *
 FROM t
 WHERE a = @a AND b = @@project_id;
+
+== should end a variable's name at a comment ==
+SELECT * FROM t WHERE x = @v# note
+  AND y = 1;
+
+[expect]
+SELECT *
+FROM t
+WHERE x = @v # note
+  AND y = 1;
+
+== should keep the dashes of a project's name ==
+SELECT * FROM   my-project.dataset.tbl t JOIN dataset.my-table u USING (id) WHERE a-b > 1;
+
+[expect]
+SELECT *
+FROM my-project.dataset.tbl t
+  JOIN dataset.my-table u USING (id)
+WHERE a - b > 1;
+
+== should end a raw string and a quoted name after an escaped quote ==
+SELECT r'\'' AS a, `a\`b` FROM t;
+
+[expect]
+SELECT r'\'' AS a, `a\`b`
+FROM t;

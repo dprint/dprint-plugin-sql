@@ -61,3 +61,17 @@ select count(*), coalesce(a, b), now() from t;
 [expect]
 SELECT count(*), coalesce(a, b), now()
 FROM t;
+
+== should keep the case of a table named like a keyword ==
+select * from transaction t join view v on t.id = v.id;
+update transaction set a = 1;
+create view v as select 1;
+
+[expect]
+SELECT *
+FROM transaction t
+  JOIN view v ON t.id = v.id;
+UPDATE transaction
+SET a = 1;
+CREATE VIEW v AS
+SELECT 1;

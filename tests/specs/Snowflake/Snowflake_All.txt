@@ -112,3 +112,18 @@ FROM t MATCH_RECOGNIZE (
   PATTERN (up+ down+)
   DEFINE up AS price > LAG(price), down AS price < LAG(price)
 );
+
+== should keep the paths of stages and files ==
+COPY INTO t FROM   @my_stage/path/file.csv;
+SELECT * FROM @%t;
+PUT file:///tmp/x.csv @~/staged;
+LIST @my_stage/data/2024/;
+REMOVE @%mytable/old;
+
+[expect]
+COPY INTO t FROM @my_stage/path/file.csv;
+SELECT *
+FROM @%t;
+PUT file:///tmp/x.csv @~/staged;
+LIST @my_stage/data/2024/;
+REMOVE @%mytable/old;

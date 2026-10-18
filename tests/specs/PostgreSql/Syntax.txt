@@ -130,3 +130,10 @@ VALUES (2)
 ON CONFLICT (a) DO SELECT
 WHERE t.b = 1
 RETURNING t.a;
+
+== should keep unicode whitespace in a name ==
+SELECT a b, c　d FROM t;
+
+[expect]
+SELECT a b, c　d
+FROM t;

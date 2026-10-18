@@ -749,7 +749,8 @@ impl ClauseScan {
   fn match_clause(&mut self, elements: &[Element], i: usize) -> Option<(ClauseKind, usize)> {
     let token = word_at(elements, i)?;
     let previous = prev_significant(elements, i);
-    if previous.is_some_and(|e| e.is_kind(TokenKind::Dot))
+    // a word that's part of a qualified name, or an item of a list (ex. a column named `offset`)
+    if previous.is_some_and(|e| e.is_kind(TokenKind::Dot) || e.is_kind(TokenKind::Comma))
       || elements.get(i + 1).is_some_and(|e| e.is_kind(TokenKind::Dot))
     {
       return None;
@@ -1149,6 +1150,14 @@ fn gen_clause(clause: &Clause, context: &mut Context) -> PrintItems {
     return items;
   }
   let needs_space = !clause.keyword.is_empty() && !keyword_comment_ends_line;
+  if clause
+    .keyword
+    .last()
+    .and_then(|e| e.as_token())
+    .is_some_and(names_table)
+  {
+    context.table_name_start = body.iter().find(|e| !e.is_comment()).map(|e| e.first_token().start);
+  }
   match clause.kind {
     ClauseKind::Head => items.extend(gen_fill(body, context)),
     ClauseKind::Fill | ClauseKind::Condition | ClauseKind::With | ClauseKind::MergeWhen => {
@@ -1692,6 +1701,7 @@ fn join_keyword_len(elements: &[Element], i: usize) -> Option<usize> {
 
 fn gen_join(keyword: &[Element], rest: &[Element], context: &mut Context) -> PrintItems {
   let mut items = gen_fill_ex(keyword, context, true);
+  context.table_name_start = rest.iter().find(|e| !e.is_comment()).map(|e| e.first_token().start);
   if rest.is_empty() {
     return items;
   }
@@ -1988,7 +1998,9 @@ fn gen_fill_ex(elements: &[Element], context: &mut Context, all_keywords: bool) 
 fn gen_element(elements: &[Element], i: usize, context: &mut Context, all_keywords: bool) -> PrintItems {
   match &elements[i] {
     Element::Token(token) => {
-      let is_keyword = token.kind == TokenKind::Word && (all_keywords || is_keyword_at(elements, i));
+      let is_keyword = token.kind == TokenKind::Word
+        && (all_keywords || is_keyword_at(elements, i))
+        && !(context.table_name_start == Some(token.start) && is_likely_table_name(token));
       gen_token(token, is_keyword, context)
     }
     Element::Group(group) => gen_group(group, context),
@@ -2029,7 +2041,7 @@ fn is_keyword_at(elements: &[Element], i: usize) -> bool {
     return false;
   }
   if keywords::contains(keywords::RESERVED, token.text) {
-    return true;
+    return !(previous.and_then(|e| e.as_token()).is_some_and(names_table) && is_likely_table_name(token));
   }
   // words that are keywords before the word after them
   let next = elements.get(i + 1).and_then(|e| e.as_token());
@@ -2062,6 +2074,30 @@ fn gen_token(token: &Token, is_keyword: bool, context: &mut Context) -> PrintIte
     _ if token.is_multi_line() => gen_raw_text(token.text),
     _ => ir_helpers::gen_from_string(token.text),
   }
+}
+
+/// Whether a table's name follows `token` (ex. `FROM`).
+fn names_table(token: &Token) -> bool {
+  ["FROM", "JOIN", "INTO", "UPDATE", "TABLE"]
+    .iter()
+    .any(|w| token.is_word(w))
+}
+
+/// Whether `token` is a reserved word that's also a likely name of a table, which keeps its case
+/// where a table is named (ex. `FROM view`), since that may matter (ex. in MySQL on Linux).
+fn is_likely_table_name(token: &Token) -> bool {
+  [
+    "DATABASE",
+    "FUNCTION",
+    "HANDLER",
+    "INDEX",
+    "SCHEMA",
+    "TRANSACTION",
+    "TRIGGER",
+    "VIEW",
+  ]
+  .iter()
+  .any(|w| token.is_word(w))
 }
 
 /// Text written exactly as it is, including the line breaks within it. The first line is
