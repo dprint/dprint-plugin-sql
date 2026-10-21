@@ -12,7 +12,8 @@ import { getBuffer } from "@dprint/sql";
 
 const formatter = createFromBuffer(getBuffer());
 
-console.log(
-  formatter.formatText("test.sql", "SELECT    *  FROM  dbo.Something"),
-);
+console.log(formatter.formatText({
+  filePath: "test.sql",
+  fileText: "SELECT    *  FROM  dbo.Something",
+}));
 ```
