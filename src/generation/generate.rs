@@ -2329,8 +2329,6 @@ fn gen_code_body<'a>(token: &Token<'a>, context: &mut Context<'a>) -> PrintItems
   gen_raw_text(context.arena, result.into_bump_str())
 }
 
-/// Whether a space goes between the element at `i` and the one before it, neither of which is a
-/// comment.
 /// Whether two tokens that are apart in the text would read as something else written against each
 /// other (ex. `@ a` as the variable `@a`, or `{ {` as the start of a template).
 fn would_join(previous: &Token, next: &Token, context: &Context) -> bool {
@@ -2345,6 +2343,8 @@ fn would_join(previous: &Token, next: &Token, context: &Context) -> bool {
   }
 }
 
+/// Whether a space goes between the element at `i` and the one before it, neither of which is a
+/// comment.
 fn needs_space(elements: &[Element], i: usize) -> bool {
   let previous = &elements[i - 1];
   let next = &elements[i];
