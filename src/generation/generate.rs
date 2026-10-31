@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use dprint_core::formatting::conditions::*;
 use dprint_core::formatting::ir_helpers;
 use dprint_core::formatting::ir_helpers::GenSeparatedValuesOptions;
@@ -17,26 +15,32 @@ use crate::keywords;
 use crate::lexer::Token;
 use crate::lexer::TokenKind;
 
-pub fn generate(list: &StatementList, context: &mut Context) -> PrintItems {
+pub fn generate<'a>(list: &StatementList<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
   let mut items = gen_statement_list(&list.items, context, true);
   items.push_condition(if_true(
     "endOfFileNewLine",
-    Rc::new(|context| Some(context.writer_info.column_number > 0 || context.writer_info.line_number > 0)),
-    Signal::NewLine.into(),
+    context
+      .arena
+      .alloc_resolver(|context| Some(context.writer_info.column_number > 0 || context.writer_info.line_number > 0)),
+    Signal::NewLine.into_print_items(context.arena),
   ));
   items
 }
 
 /// The items of the top level statement list without the newline at the end of the file, which
 /// formatting a range uses.
-pub fn generate_items(items: &[Item], context: &mut Context) -> PrintItems {
+pub fn generate_items<'a>(items: &[Item<'a>], context: &mut Context<'a>) -> PrintItems<'a> {
   gen_statement_list(items, context, true)
 }
 
 // ---- statement lists ----
 
-pub(crate) fn gen_statement_list(items: &[Item], context: &mut Context, is_top_level: bool) -> PrintItems {
-  let mut result = PrintItems::new();
+pub(crate) fn gen_statement_list<'a>(
+  items: &[Item<'a>],
+  context: &mut Context<'a>,
+  is_top_level: bool,
+) -> PrintItems<'a> {
+  let mut result = PrintItems::new(context.arena);
   for (i, item) in items.iter().enumerate() {
     if i > 0 && is_glued_to_empty_statement(&items[i - 1], item) {
       // T-SQL's `;WITH`, which guards against the statement before it missing its `;`
@@ -67,13 +71,13 @@ fn is_glued_to_empty_statement(previous: &Item, item: &Item) -> bool {
     && item.first_token().is_some_and(|token| !token.space_before)
 }
 
-fn gen_item(item: &Item, context: &mut Context) -> PrintItems {
+fn gen_item<'a>(item: &Item<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
   match &item.kind {
-    ItemKind::Comment(token) => gen_comment(token),
+    ItemKind::Comment(token) => gen_comment(context.arena, token),
     ItemKind::Command(token, comments) => {
-      let mut items = gen_raw_text(token.text.trim_end_matches(crate::lexer::is_space));
+      let mut items = gen_raw_text(context.arena, token.text.trim_end_matches(crate::lexer::is_space));
       for comment in comments {
-        items.extend(gen_trailing_comment(comment));
+        items.extend(gen_trailing_comment(context.arena, comment));
       }
       items
     }
@@ -83,13 +87,13 @@ fn gen_item(item: &Item, context: &mut Context) -> PrintItems {
 
 /// The statements of a block's body: a comment on the line of whatever opened the body stays on
 /// that line, and the rest are indented on the lines below.
-fn gen_body(list: &StatementList, context: &mut Context) -> PrintItems {
-  let mut items = PrintItems::new();
+fn gen_body<'a>(list: &StatementList<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
+  let mut items = PrintItems::new(context.arena);
   let mut rest = &list.items[..];
   while let Some(first) = rest.first() {
     match &first.kind {
       ItemKind::Comment(token) if token.newlines_before == 0 => {
-        items.extend(gen_trailing_comment(token));
+        items.extend(gen_trailing_comment(context.arena, token));
         rest = &rest[1..];
       }
       _ => break,
@@ -104,7 +108,7 @@ fn gen_body(list: &StatementList, context: &mut Context) -> PrintItems {
 
 // ---- statements ----
 
-fn gen_statement(statement: &Statement, context: &mut Context) -> PrintItems {
+fn gen_statement<'a>(statement: &Statement<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
   if statement.ignored {
     return gen_ignored_statement(statement, context);
   }
@@ -113,21 +117,21 @@ fn gen_statement(statement: &Statement, context: &mut Context) -> PrintItems {
   let mut items = gen_statement_elements(&statement.elements, context);
   if let Some(terminator) = statement.terminator {
     if terminator.kind == TokenKind::Delimiter && terminator.space_before && !statement.elements.is_empty() {
-      items.extend(space_if_not_start_of_line());
+      items.extend(space_if_not_start_of_line(context.arena));
     }
-    items.extend(ir_helpers::gen_from_string(terminator.text));
+    items.extend(ir_helpers::gen_from_string(context.arena, terminator.text));
   }
   for comment in &statement.trailing_comments {
-    items.extend(gen_trailing_comment(comment));
+    items.extend(gen_trailing_comment(context.arena, comment));
   }
   items
 }
 
 /// A statement after a `dprint-ignore` comment, which is written exactly as it is.
-fn gen_ignored_statement(statement: &Statement, context: &mut Context) -> PrintItems {
+fn gen_ignored_statement<'a>(statement: &Statement<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
   match (statement.first_token(), statement.last_token()) {
-    (Some(first), Some(last)) => gen_raw_text(&context.text[first.start..last.end()]),
-    _ => PrintItems::new(),
+    (Some(first), Some(last)) => gen_raw_text(context.arena, &context.text[first.start..last.end()]),
+    _ => PrintItems::new(context.arena),
   }
 }
 
@@ -161,8 +165,8 @@ fn collect_code_bodies(statement: &Statement, context: &mut Context) {
 }
 
 /// A statement's elements, which are runs of clauses with blocks of procedural code between them.
-fn gen_statement_elements(elements: &[Element], context: &mut Context) -> PrintItems {
-  let mut items = PrintItems::new();
+fn gen_statement_elements<'a>(elements: &[Element<'a>], context: &mut Context<'a>) -> PrintItems<'a> {
+  let mut items = PrintItems::new(context.arena);
   let mut run_start = 0;
   let mut has_written = false;
   let mut previous_was_inline_label = false;
@@ -202,7 +206,7 @@ fn gen_statement_elements(elements: &[Element], context: &mut Context) -> PrintI
 }
 
 /// A run of elements without procedural code, which is laid out as clauses each starting a line.
-fn gen_run(elements: &[Element], declarations_follow: bool, context: &mut Context) -> PrintItems {
+fn gen_run<'a>(elements: &[Element<'a>], declarations_follow: bool, context: &mut Context<'a>) -> PrintItems<'a> {
   let clauses = split_clauses_ex(elements, declarations_follow);
   // a query that a cursor is declared or opened for, or that's returned, is indented beneath the
   // statement's head when it doesn't fit on its line
@@ -217,7 +221,7 @@ fn gen_run(elements: &[Element], declarations_follow: bool, context: &mut Contex
     None
   };
   let head_count = query_start.unwrap_or(clauses.len());
-  let mut items = PrintItems::new();
+  let mut items = PrintItems::new(context.arena);
   for (i, clause) in clauses[..head_count].iter().enumerate() {
     if i > 0 && clause.kind != ClauseKind::InlineList {
       items.push_signal(Signal::NewLine);
@@ -234,7 +238,7 @@ fn gen_run(elements: &[Element], declarations_follow: bool, context: &mut Contex
 
 // ---- procedural code ----
 
-fn gen_procedural(element: &Element, context: &mut Context) -> PrintItems {
+fn gen_procedural<'a>(element: &Element<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
   match element {
     Element::Block(block) => gen_block(block, context),
     Element::DeclareSection(section) => gen_declare_section(section, context),
@@ -242,21 +246,21 @@ fn gen_procedural(element: &Element, context: &mut Context) -> PrintItems {
     Element::Conditional(conditional) => gen_conditional(conditional, context),
     Element::Loop(block) => gen_loop(block, context),
     Element::CaseStatement(statement) => gen_case_statement(statement, context),
-    Element::Label(label) => gen_label(label),
+    Element::Label(label) => gen_label(context.arena, label),
     _ => gen_fill(std::slice::from_ref(element), context),
   }
 }
 
-fn gen_block(block: &Block, context: &mut Context) -> PrintItems {
+fn gen_block<'a>(block: &Block<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
   let mut items = gen_keywords(&block.begin, context);
   items.extend(gen_body(&block.body, context));
   if let Some(exception) = &block.exception {
     items.push_signal(Signal::NewLine);
     items.extend(gen_keyword(exception.keyword, context));
-    let mut handlers = PrintItems::new();
+    let mut handlers = PrintItems::new(context.arena);
     for comment in &exception.leading_comments {
       handlers.push_signal(Signal::NewLine);
-      handlers.extend(gen_comment(comment));
+      handlers.extend(gen_comment(context.arena, comment));
     }
     for handler in &exception.handlers {
       handlers.push_signal(Signal::NewLine);
@@ -271,13 +275,13 @@ fn gen_block(block: &Block, context: &mut Context) -> PrintItems {
 
 /// `WHEN condition THEN` followed by the statements of an exception handler or a procedural
 /// `CASE` branch.
-fn gen_handler(handler: &Handler, context: &mut Context) -> PrintItems {
+fn gen_handler<'a>(handler: &Handler<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
   let mut items = gen_keyword(handler.when, context);
   if !handler.condition.is_empty() {
     items.push_space();
     items.extend(gen_fill(&handler.condition, context));
   }
-  items.extend(space_if_not_start_of_line());
+  items.extend(space_if_not_start_of_line(context.arena));
   items.extend(gen_keyword(handler.then, context));
   items.extend(gen_body(&handler.body, context));
   items
@@ -285,8 +289,8 @@ fn gen_handler(handler: &Handler, context: &mut Context) -> PrintItems {
 
 /// `END` and the words after it, of which only the ones saying what ends are keywords (ex. the
 /// `IF` of `END IF`, but not the name of a procedure).
-fn gen_end(tokens: &[Tok], context: &mut Context) -> PrintItems {
-  let mut items = PrintItems::new();
+fn gen_end<'a>(tokens: &[Tok<'a>], context: &mut Context<'a>) -> PrintItems<'a> {
+  let mut items = PrintItems::new(context.arena);
   for (i, token) in tokens.iter().enumerate() {
     if i > 0 {
       items.push_space();
@@ -298,7 +302,7 @@ fn gen_end(tokens: &[Tok], context: &mut Context) -> PrintItems {
   items
 }
 
-fn gen_declare_section(section: &DeclareSection, context: &mut Context) -> PrintItems {
+fn gen_declare_section<'a>(section: &DeclareSection<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
   match section.keyword {
     Some(keyword) => {
       let mut items = gen_keyword(keyword, context);
@@ -310,8 +314,8 @@ fn gen_declare_section(section: &DeclareSection, context: &mut Context) -> Print
   }
 }
 
-fn gen_if(block: &IfBlock, context: &mut Context) -> PrintItems {
-  let mut items = PrintItems::new();
+fn gen_if<'a>(block: &IfBlock<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
+  let mut items = PrintItems::new(context.arena);
   for (i, branch) in block.branches.iter().enumerate() {
     if i > 0 {
       items.push_signal(Signal::NewLine);
@@ -319,7 +323,7 @@ fn gen_if(block: &IfBlock, context: &mut Context) -> PrintItems {
     items.extend(gen_keyword(branch.keyword, context));
     items.push_space();
     items.extend(gen_conditions_hanging(&branch.condition, context));
-    items.extend(space_if_not_start_of_line());
+    items.extend(space_if_not_start_of_line(context.arena));
     items.extend(gen_keyword(branch.then, context));
     items.extend(gen_body(&branch.body, context));
   }
@@ -336,7 +340,7 @@ fn gen_if(block: &IfBlock, context: &mut Context) -> PrintItems {
 /// T-SQL's `IF` and `WHILE`, whose body is a single statement. A block is written beneath the
 /// condition at the same indentation, like its `BEGIN` and `END` always are, and any other
 /// statement is indented beneath it.
-fn gen_conditional(conditional: &Conditional, context: &mut Context) -> PrintItems {
+fn gen_conditional<'a>(conditional: &Conditional<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
   let mut items = gen_keyword(conditional.keyword, context);
   items.push_space();
   // the lines of a condition that doesn't fit are indented further than the statement beneath it
@@ -348,7 +352,7 @@ fn gen_conditional(conditional: &Conditional, context: &mut Context) -> PrintIte
   items.extend(gen_conditional_body(&conditional.body, context));
   for comment in &conditional.else_comments {
     items.push_signal(Signal::NewLine);
-    items.extend(gen_comment(comment));
+    items.extend(gen_comment(context.arena, comment));
   }
   if let Some((keyword, statement)) = &conditional.else_branch {
     items.push_signal(Signal::NewLine);
@@ -365,7 +369,7 @@ fn gen_conditional(conditional: &Conditional, context: &mut Context) -> PrintIte
   items
 }
 
-fn gen_conditional_body(statement: &Statement, context: &mut Context) -> PrintItems {
+fn gen_conditional_body<'a>(statement: &Statement<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
   let is_block = statement
     .elements
     .iter()
@@ -379,7 +383,7 @@ fn gen_conditional_body(statement: &Statement, context: &mut Context) -> PrintIt
   }
 }
 
-fn gen_loop(block: &Loop, context: &mut Context) -> PrintItems {
+fn gen_loop<'a>(block: &Loop<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
   let mut items = gen_loop_header(&block.header, context);
   items.extend(gen_body(&block.body, context));
   if let Some((keyword, condition)) = &block.until {
@@ -396,7 +400,7 @@ fn gen_loop(block: &Loop, context: &mut Context) -> PrintItems {
 /// The header of a loop up to and including its `LOOP` or `DO`. A query to loop over (ex.
 /// `FOR row IN SELECT ..`) stays on the line when it fits, and otherwise is indented on the
 /// lines between the `IN` and the `LOOP`.
-fn gen_loop_header(header: &[Element], context: &mut Context) -> PrintItems {
+fn gen_loop_header<'a>(header: &[Element<'a>], context: &mut Context<'a>) -> PrintItems<'a> {
   let query_start = header
     .iter()
     .enumerate()
@@ -415,13 +419,13 @@ fn gen_loop_header(header: &[Element], context: &mut Context) -> PrintItems {
   items
 }
 
-fn gen_case_statement(statement: &CaseStatement, context: &mut Context) -> PrintItems {
+fn gen_case_statement<'a>(statement: &CaseStatement<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
   let mut items = gen_keyword(statement.case_keyword, context);
   if !statement.operand.is_empty() {
     items.push_space();
     items.extend(gen_fill(&statement.operand, context));
   }
-  let mut branches = PrintItems::new();
+  let mut branches = PrintItems::new(context.arena);
   for branch in &statement.branches {
     branches.push_signal(Signal::NewLine);
     branches.extend(gen_handler(branch, context));
@@ -437,9 +441,9 @@ fn gen_case_statement(statement: &CaseStatement, context: &mut Context) -> Print
   items
 }
 
-fn gen_label(label: &Label) -> PrintItems {
+fn gen_label<'a>(arena: &'a Arena, label: &Label<'a>) -> PrintItems<'a> {
   let text: String = label.tokens.iter().map(|token| token.text).collect();
-  ir_helpers::gen_from_string(&text)
+  ir_helpers::gen_from_string(arena, arena.bump().alloc_str(&text))
 }
 
 // ---- clauses ----
@@ -1148,10 +1152,14 @@ fn skip_name(elements: &[Element], start: usize) -> Option<usize> {
   Some(i)
 }
 
-fn gen_clause(clause: &Clause, context: &mut Context) -> PrintItems {
-  let mut items = PrintItems::new();
+fn gen_clause<'a>(clause: &Clause<'_, 'a>, context: &mut Context<'a>) -> PrintItems<'a> {
+  let mut items = PrintItems::new(context.arena);
   let first_token = clause.keyword.first().or(clause.body.first()).map(|e| e.first_token());
-  items.extend(gen_leading_comments(&clause.leading_comments, first_token));
+  items.extend(gen_leading_comments(
+    context.arena,
+    &clause.leading_comments,
+    first_token,
+  ));
   let mut body = clause.body;
   let mut keyword_comment_ends_line = false;
   if !clause.keyword.is_empty() {
@@ -1162,7 +1170,7 @@ fn gen_clause(clause: &Clause, context: &mut Context) -> PrintItems {
       .and_then(|e| e.as_token())
       .filter(|t| t.is_comment() && t.newlines_before == 0)
     {
-      items.extend(gen_trailing_comment(token));
+      items.extend(gen_trailing_comment(context.arena, token));
       keyword_comment_ends_line |= token.is_line_comment();
       body = &body[1..];
     }
@@ -1209,14 +1217,14 @@ fn gen_clause(clause: &Clause, context: &mut Context) -> PrintItems {
   items
 }
 
-fn gen_clause_body(
+fn gen_clause_body<'a>(
   kind: ClauseKind,
-  body: &[Element],
+  body: &[Element<'a>],
   needs_space: bool,
   keyword_comment_ends_line: bool,
-  context: &mut Context,
-) -> PrintItems {
-  let mut items = PrintItems::new();
+  context: &mut Context<'a>,
+) -> PrintItems<'a> {
+  let mut items = PrintItems::new(context.arena);
   match kind {
     ClauseKind::Head => items.extend(gen_fill(body, context)),
     ClauseKind::Fill | ClauseKind::Condition | ClauseKind::With | ClauseKind::MergeWhen => {
@@ -1243,7 +1251,7 @@ fn gen_clause_body(
       }
       let start = body[0].first_token().start;
       let end = body[body.len() - 1].last_token().end();
-      items.extend(gen_raw_text(&context.text[start..end]));
+      items.extend(gen_raw_text(context.arena, &context.text[start..end]));
     }
     ClauseKind::SetOperator => {
       items.push_signal(Signal::NewLine);
@@ -1268,7 +1276,12 @@ enum ClausesLayout {
 }
 
 /// Clauses that are written on one line when they fit and otherwise on a line each.
-fn gen_clauses_fit(clauses: &[Clause], force: bool, layout: ClausesLayout, context: &mut Context) -> PrintItems {
+fn gen_clauses_fit<'a>(
+  clauses: &[Clause<'_, 'a>],
+  force: bool,
+  layout: ClausesLayout,
+  context: &mut Context<'a>,
+) -> PrintItems<'a> {
   let indent_width = context.config.indent_width;
   gen_nested_separated_values(
     context,
@@ -1287,12 +1300,14 @@ fn gen_clauses_fit(clauses: &[Clause], force: bool, layout: ClausesLayout, conte
     GenSeparatedValuesOptions {
       prefer_hanging: false,
       force_use_new_lines: force,
-      allow_blank_lines: false,
+      max_blank_lines: 0,
       indent_width,
       single_line_options: match layout {
-        ClausesLayout::InBrackets => SingleLineOptions::separated_same_line(Signal::SpaceOrNewLine.into()),
-        ClausesLayout::BetweenWords => SingleLineOptions::surrounded_line(),
-        ClausesLayout::AfterHead => SingleLineOptions::separated_line_starting_with_space(),
+        ClausesLayout::InBrackets => {
+          SingleLineOptions::separated_same_line(Signal::SpaceOrNewLine.into_print_items(context.arena))
+        }
+        ClausesLayout::BetweenWords => SingleLineOptions::surrounded_line(context.arena),
+        ClausesLayout::AfterHead => SingleLineOptions::separated_line_starting_with_space(context.arena),
       },
       multi_line_options: match layout {
         ClausesLayout::InBrackets | ClausesLayout::BetweenWords => MultiLineOptions::surround_newlines_indented(),
@@ -1440,13 +1455,13 @@ fn split_list<'e, 'a>(elements: &'e [Element<'a>]) -> Vec<ListItem<'e, 'a>> {
   items
 }
 
-fn gen_list(elements: &[Element], style: ListStyle, force: bool, context: &mut Context) -> PrintItems {
+fn gen_list<'a>(elements: &[Element<'a>], style: ListStyle, force: bool, context: &mut Context<'a>) -> PrintItems<'a> {
   // a template tag may hold the commas around it (ex. `{% if x %}, b{% endif %}`), so a list with
   // one on a line of its own or a statement tag against a comma is written as it flows rather than
   // item by item
   if has_template_around_commas(elements) {
-    let mut items = PrintItems::new();
-    let mut body = PrintItems::new();
+    let mut items = PrintItems::new(context.arena);
+    let mut body = PrintItems::new(context.arena);
     body.push_signal(Signal::NewLine);
     body.extend(gen_fill(elements, context));
     items.extend(ir_helpers::with_indent(body));
@@ -1457,7 +1472,7 @@ fn gen_list(elements: &[Element], style: ListStyle, force: bool, context: &mut C
   }
   let items = split_list(elements);
   if items.is_empty() {
-    return PrintItems::new();
+    return PrintItems::new(context.arena);
   }
   let count = items.len();
   let starts_with_case = matches!(items[0].elements.first(), Some(Element::Case(_)));
@@ -1470,7 +1485,7 @@ fn gen_list(elements: &[Element], style: ListStyle, force: bool, context: &mut C
     // a lone item stays against its keyword, however it's written: moving it to the next line
     // only when it's too long would leave whatever breaks within it deciding the line it starts
     // on, which the next time it's formatted would decide differently
-    let mut result = PrintItems::new();
+    let mut result = PrintItems::new(context.arena);
     result.push_space();
     result.extend(gen_list_item(&items[0], context));
     return result;
@@ -1519,11 +1534,13 @@ fn gen_list(elements: &[Element], style: ListStyle, force: bool, context: &mut C
     GenSeparatedValuesOptions {
       prefer_hanging: false,
       force_use_new_lines: force,
-      allow_blank_lines: style == ListStyle::InBrackets,
+      max_blank_lines: u32::from(style == ListStyle::InBrackets),
       indent_width,
       single_line_options: match style {
-        ListStyle::AfterKeyword => SingleLineOptions::separated_line_starting_with_space(),
-        ListStyle::InBrackets => SingleLineOptions::separated_same_line(Signal::SpaceOrNewLine.into()),
+        ListStyle::AfterKeyword => SingleLineOptions::separated_line_starting_with_space(context.arena),
+        ListStyle::InBrackets => {
+          SingleLineOptions::separated_same_line(Signal::SpaceOrNewLine.into_print_items(context.arena))
+        }
       },
       multi_line_options: match style {
         ListStyle::AfterKeyword => MultiLineOptions::new_line_start(),
@@ -1546,9 +1563,10 @@ fn has_template_around_commas(elements: &[Element]) -> bool {
   })
 }
 
-fn gen_list_item(item: &ListItem, context: &mut Context) -> PrintItems {
-  let mut items = PrintItems::new();
+fn gen_list_item<'a>(item: &ListItem<'_, 'a>, context: &mut Context<'a>) -> PrintItems<'a> {
+  let mut items = PrintItems::new(context.arena);
   items.extend(gen_leading_comments(
+    context.arena,
     &item.leading_comments,
     item.elements.first().map(|e| e.first_token()),
   ));
@@ -1557,11 +1575,11 @@ fn gen_list_item(item: &ListItem, context: &mut Context) -> PrintItems {
     items.push_str(",");
   }
   for comment in &item.trailing_comments {
-    items.extend(gen_trailing_comment(comment));
+    items.extend(gen_trailing_comment(context.arena, comment));
   }
   for comment in &item.after_comments {
     items.push_signal(Signal::NewLine);
-    items.extend(gen_comment(comment));
+    items.extend(gen_comment(context.arena, comment));
   }
   items
 }
@@ -1634,7 +1652,7 @@ fn split_conditions<'e, 'a>(elements: &'e [Element<'a>]) -> Vec<ConditionPart<'e
 
 /// Conditions after a keyword, of which the first stays on the keyword's line and the rest are
 /// indented on lines of their own when they don't fit (ex. `WHERE a = 1` then `  AND b = 2`).
-fn gen_conditions_hanging(elements: &[Element], context: &mut Context) -> PrintItems {
+fn gen_conditions_hanging<'a>(elements: &[Element<'a>], context: &mut Context<'a>) -> PrintItems<'a> {
   let parts = split_conditions(elements);
   gen_condition_parts(
     None,
@@ -1645,13 +1663,13 @@ fn gen_conditions_hanging(elements: &[Element], context: &mut Context) -> PrintI
   )
 }
 
-fn gen_condition_parts(
-  first: Option<PrintItems>,
-  parts: &[ConditionPart],
-  multi_line_options: MultiLineOptions,
+fn gen_condition_parts<'a>(
+  first: Option<PrintItems<'a>>,
+  parts: &[ConditionPart<'_, 'a>],
+  multi_line_options: MultiLineOptions<'a>,
   force: bool,
-  context: &mut Context,
-) -> PrintItems {
+  context: &mut Context<'a>,
+) -> PrintItems<'a> {
   if first.is_none() && parts.len() == 1 && parts[0].leading_comments.is_empty() {
     return gen_condition_part(&parts[0], context);
   }
@@ -1678,9 +1696,11 @@ fn gen_condition_parts(
     GenSeparatedValuesOptions {
       prefer_hanging: false,
       force_use_new_lines: force,
-      allow_blank_lines: false,
+      max_blank_lines: 0,
       indent_width,
-      single_line_options: SingleLineOptions::separated_same_line(Signal::SpaceOrNewLine.into()),
+      single_line_options: SingleLineOptions::separated_same_line(
+        Signal::SpaceOrNewLine.into_print_items(context.arena),
+      ),
       multi_line_options,
       force_possible_newline_at_start: false,
     },
@@ -1688,13 +1708,13 @@ fn gen_condition_parts(
   .items
 }
 
-fn gen_condition_part(part: &ConditionPart, context: &mut Context) -> PrintItems {
-  let mut items = PrintItems::new();
+fn gen_condition_part<'a>(part: &ConditionPart<'_, 'a>, context: &mut Context<'a>) -> PrintItems<'a> {
+  let mut items = PrintItems::new(context.arena);
   let first_token = part.operator.or_else(|| part.elements.first().map(|e| e.first_token()));
-  items.extend(gen_leading_comments(&part.leading_comments, first_token));
+  items.extend(gen_leading_comments(context.arena, &part.leading_comments, first_token));
   if let Some(operator) = part.operator {
     items.extend(gen_keyword(operator, context));
-    items.extend(space_or_comment_spacing_opt(part.elements.first()));
+    items.extend(space_or_comment_spacing_opt(context.arena, part.elements.first()));
   }
   items.extend(gen_fill(part.elements, context));
   items
@@ -1702,7 +1722,7 @@ fn gen_condition_part(part: &ConditionPart, context: &mut Context) -> PrintItems
 
 // ---- from and joins ----
 
-fn gen_from(body: &[Element], force_list: bool, context: &mut Context) -> PrintItems {
+fn gen_from<'a>(body: &[Element<'a>], force_list: bool, context: &mut Context<'a>) -> PrintItems<'a> {
   let mut join_starts = Vec::new();
   let mut i = 0;
   while i < body.len() {
@@ -1735,9 +1755,10 @@ fn gen_from(body: &[Element], force_list: bool, context: &mut Context) -> PrintI
       pending = rest[split..].iter().filter_map(|e| e.as_token()).collect();
       rest = &rest[..split];
     }
-    let mut join = PrintItems::new();
+    let mut join = PrintItems::new(context.arena);
     join.push_signal(Signal::NewLine);
     join.extend(gen_leading_comments(
+      context.arena,
       &leading_comments,
       Some(body[*start].first_token()),
     ));
@@ -1786,13 +1807,13 @@ fn join_keyword_len(elements: &[Element], i: usize) -> Option<usize> {
   word(len).is_some_and(|t| t.is_word("JOIN")).then_some(len + 1)
 }
 
-fn gen_join(keyword: &[Element], rest: &[Element], context: &mut Context) -> PrintItems {
+fn gen_join<'a>(keyword: &[Element<'a>], rest: &[Element<'a>], context: &mut Context<'a>) -> PrintItems<'a> {
   let mut items = gen_fill_ex(keyword, context, true);
   context.table_name_start = rest.iter().find(|e| !e.is_comment()).map(|e| e.first_token().start);
   if rest.is_empty() {
     return items;
   }
-  items.extend(space_or_comment_spacing(&rest[0]));
+  items.extend(space_or_comment_spacing(context.arena, &rest[0]));
   match rest.iter().position(|e| e.is_word("ON")) {
     Some(on_index) if on_index > 0 => {
       let table = gen_fill(&rest[..on_index], context);
@@ -1814,8 +1835,8 @@ fn gen_join(keyword: &[Element], rest: &[Element], context: &mut Context) -> Pri
 // ---- with ----
 
 /// The common table expressions after a `WITH`, each starting a line of its own after the first.
-fn gen_with(body: &[Element], context: &mut Context) -> PrintItems {
-  let mut items = PrintItems::new();
+fn gen_with<'a>(body: &[Element<'a>], context: &mut Context<'a>) -> PrintItems<'a> {
+  let mut items = PrintItems::new(context.arena);
   for (i, item) in split_list(body).iter().enumerate() {
     if i > 0 {
       items.push_signal(Signal::NewLine);
@@ -1827,18 +1848,18 @@ fn gen_with(body: &[Element], context: &mut Context) -> PrintItems {
 
 // ---- merge ----
 
-fn gen_merge_when(body: &[Element], context: &mut Context) -> PrintItems {
+fn gen_merge_when<'a>(body: &[Element<'a>], context: &mut Context<'a>) -> PrintItems<'a> {
   let Some(then_index) = body.iter().position(|e| e.is_word("THEN")) else {
     return gen_fill(body, context);
   };
   let mut items = gen_fill(&body[..then_index], context);
-  items.extend(space_if_not_start_of_line());
+  items.extend(space_if_not_start_of_line(context.arena));
   items.extend(gen_fill_ex(&body[then_index..then_index + 1], context, true));
   let action = &body[then_index + 1..];
   if action.is_empty() {
     return items;
   }
-  let mut action_items = PrintItems::new();
+  let mut action_items = PrintItems::new(context.arena);
   action_items.push_signal(Signal::NewLine);
   if action.first().is_some_and(|e| e.is_word("UPDATE")) && action.get(1).is_some_and(|e| e.is_word("SET")) {
     action_items.extend(gen_fill_ex(&action[..2], context, true));
@@ -1852,25 +1873,25 @@ fn gen_merge_when(body: &[Element], context: &mut Context) -> PrintItems {
 
 // ---- groups ----
 
-fn gen_group(group: &Group, context: &mut Context) -> PrintItems {
-  let mut items = ir_helpers::gen_from_string(group.open.text);
+fn gen_group<'a>(group: &Group<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
+  let mut items = ir_helpers::gen_from_string(context.arena, group.open.text);
   let elements = &group.elements;
   if elements.iter().all(|e| e.is_comment()) {
     if !elements.is_empty() {
-      let mut comments = PrintItems::new();
+      let mut comments = PrintItems::new(context.arena);
       for (i, element) in elements.iter().enumerate() {
         let token = element.as_token().unwrap();
         if i == 0 && token.newlines_before == 0 {
-          comments.extend(gen_trailing_comment(token));
+          comments.extend(gen_trailing_comment(context.arena, token));
         } else {
           comments.push_signal(Signal::NewLine);
-          comments.extend(gen_comment(token));
+          comments.extend(gen_comment(context.arena, token));
         }
       }
       items.extend(ir_helpers::with_indent(comments));
       items.push_signal(Signal::NewLine);
     }
-    items.extend(ir_helpers::gen_from_string(group.close.text));
+    items.extend(ir_helpers::gen_from_string(context.arena, group.close.text));
     return items;
   }
 
@@ -1892,7 +1913,7 @@ fn gen_group(group: &Group, context: &mut Context) -> PrintItems {
   } else {
     items.extend(gen_list(elements, ListStyle::InBrackets, force, context));
   }
-  items.extend(ir_helpers::gen_from_string(group.close.text));
+  items.extend(ir_helpers::gen_from_string(context.arena, group.close.text));
   items
 }
 
@@ -1953,7 +1974,7 @@ fn has_condition_operator(elements: &[Element]) -> bool {
 
 // ---- case ----
 
-fn gen_case(case: &Case, context: &mut Context) -> PrintItems {
+fn gen_case<'a>(case: &Case<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
   let mut items = gen_keyword(case.case_keyword, context);
   if !case.operand.is_empty() {
     items.push_space();
@@ -1968,25 +1989,30 @@ fn gen_case(case: &Case, context: &mut Context) -> PrintItems {
       |context| {
         let mut values = Vec::with_capacity(branch_count);
         for branch in &case.branches {
-          let mut items = PrintItems::new();
-          items.extend(gen_leading_comments(&branch.leading_comments, Some(branch.when)));
+          let mut items = PrintItems::new(context.arena);
+          items.extend(gen_leading_comments(
+            context.arena,
+            &branch.leading_comments,
+            Some(branch.when),
+          ));
           items.extend(gen_keyword(branch.when, context));
-          items.extend(space_or_comment_spacing_opt(branch.condition.first()));
+          items.extend(space_or_comment_spacing_opt(context.arena, branch.condition.first()));
           items.extend(gen_fill(&branch.condition, context));
-          items.extend(space_if_not_start_of_line());
+          items.extend(space_if_not_start_of_line(context.arena));
           items.extend(gen_keyword(branch.then, context));
-          items.extend(space_or_comment_spacing_opt(branch.result.first()));
+          items.extend(space_or_comment_spacing_opt(context.arena, branch.result.first()));
           items.extend(gen_fill(&branch.result, context));
           values.push(GeneratedValue::from_items(ir_helpers::new_line_group(items)));
         }
         if let Some(else_branch) = &case.else_branch {
-          let mut items = PrintItems::new();
+          let mut items = PrintItems::new(context.arena);
           items.extend(gen_leading_comments(
+            context.arena,
             &else_branch.leading_comments,
             Some(else_branch.keyword),
           ));
           items.extend(gen_keyword(else_branch.keyword, context));
-          items.extend(space_or_comment_spacing_opt(else_branch.result.first()));
+          items.extend(space_or_comment_spacing_opt(context.arena, else_branch.result.first()));
           items.extend(gen_fill(&else_branch.result, context));
           values.push(GeneratedValue::from_items(ir_helpers::new_line_group(items)));
         }
@@ -1995,7 +2021,7 @@ fn gen_case(case: &Case, context: &mut Context) -> PrintItems {
         {
           for comment in &case.end_comments {
             last.items.push_signal(Signal::NewLine);
-            last.items.extend(gen_comment(comment));
+            last.items.extend(gen_comment(context.arena, comment));
           }
         }
         values
@@ -2003,9 +2029,9 @@ fn gen_case(case: &Case, context: &mut Context) -> PrintItems {
       GenSeparatedValuesOptions {
         prefer_hanging: false,
         force_use_new_lines: force,
-        allow_blank_lines: false,
+        max_blank_lines: 0,
         indent_width,
-        single_line_options: SingleLineOptions::surrounded_line(),
+        single_line_options: SingleLineOptions::surrounded_line(context.arena),
         multi_line_options: MultiLineOptions::surround_newlines_indented(),
         force_possible_newline_at_start: false,
       },
@@ -2039,14 +2065,14 @@ fn case_forces_multi_line(case: &Case) -> bool {
 
 // ---- elements ----
 
-fn gen_fill(elements: &[Element], context: &mut Context) -> PrintItems {
+fn gen_fill<'a>(elements: &[Element<'a>], context: &mut Context<'a>) -> PrintItems<'a> {
   gen_fill_ex(elements, context, false)
 }
 
 /// Writes the elements one after another as they flow, with only comments breaking the line.
 /// `all_keywords` says that every word is a keyword (ex. the words of a clause's keyword).
-fn gen_fill_ex(elements: &[Element], context: &mut Context, all_keywords: bool) -> PrintItems {
-  let mut items = PrintItems::new();
+fn gen_fill_ex<'a>(elements: &[Element<'a>], context: &mut Context<'a>, all_keywords: bool) -> PrintItems<'a> {
+  let mut items = PrintItems::new(context.arena);
   let angle_types = angle_bracket_types(elements);
   for (i, element) in elements.iter().enumerate() {
     if i > 0 {
@@ -2064,7 +2090,7 @@ fn gen_fill_ex(elements: &[Element], context: &mut Context, all_keywords: bool) 
         if token.newlines_before > 0 {
           items.push_signal(Signal::NewLine);
         } else if !previous.is_line_comment() {
-          items.extend(space_if_not_start_of_line());
+          items.extend(space_if_not_start_of_line(context.arena));
         }
       } else if previous.is_line_comment() {
         // the comment already ended the line
@@ -2090,7 +2116,12 @@ fn gen_fill_ex(elements: &[Element], context: &mut Context, all_keywords: bool) 
   items
 }
 
-fn gen_element(elements: &[Element], i: usize, context: &mut Context, all_keywords: bool) -> PrintItems {
+fn gen_element<'a>(
+  elements: &[Element<'a>],
+  i: usize,
+  context: &mut Context<'a>,
+  all_keywords: bool,
+) -> PrintItems<'a> {
   match &elements[i] {
     Element::Token(token) => {
       let is_keyword = token.kind == TokenKind::Word
@@ -2161,13 +2192,13 @@ fn is_keyword_at(elements: &[Element], i: usize) -> bool {
     .any(|(word, after)| token.is_word(word) && after.iter().any(|a| previous.is_word(a)))
 }
 
-fn gen_token(token: &Token, is_keyword: bool, context: &mut Context) -> PrintItems {
+fn gen_token<'a>(token: &Token<'a>, is_keyword: bool, context: &mut Context<'a>) -> PrintItems<'a> {
   match token.kind {
     TokenKind::Word => gen_word(token, is_keyword, context),
-    TokenKind::LineComment | TokenKind::BlockComment | TokenKind::TemplateLine => gen_comment(token),
+    TokenKind::LineComment | TokenKind::BlockComment | TokenKind::TemplateLine => gen_comment(context.arena, token),
     TokenKind::DollarString if context.code_bodies.contains(&token.start) => gen_code_body(token, context),
-    _ if token.is_multi_line() => gen_raw_text(token.text),
-    _ => ir_helpers::gen_from_string(token.text),
+    _ if token.is_multi_line() => gen_raw_text(context.arena, token.text),
+    _ => ir_helpers::gen_from_string(context.arena, token.text),
   }
 }
 
@@ -2200,11 +2231,11 @@ fn is_likely_table_name(token: &Token) -> bool {
 /// with their depth.
 const MAX_FITTED_DEPTH: u32 = 12;
 
-fn gen_nested_separated_values(
-  context: &mut Context,
-  gen_values: impl FnOnce(&mut Context) -> Vec<GeneratedValue>,
-  mut opts: GenSeparatedValuesOptions,
-) -> GenSeparatedValuesResult {
+fn gen_nested_separated_values<'a>(
+  context: &mut Context<'a>,
+  gen_values: impl FnOnce(&mut Context<'a>) -> Vec<GeneratedValue<'a>>,
+  mut opts: GenSeparatedValuesOptions<'a>,
+) -> GenSeparatedValuesResult<'a> {
   context.separated_values_depth += 1;
   opts.force_use_new_lines |= context.separated_values_depth > MAX_FITTED_DEPTH;
   let result = ir_helpers::gen_separated_values(|_| gen_values(context), opts);
@@ -2215,15 +2246,15 @@ fn gen_nested_separated_values(
 /// Text written exactly as it is, including the line breaks within it. The first line is
 /// indented like any other, but the lines after it aren't, since the text is a token whose
 /// contents can't change (ex. a string spanning lines).
-fn gen_raw_text(text: &str) -> PrintItems {
-  let mut items = PrintItems::new();
+fn gen_raw_text<'a>(arena: &'a Arena, text: &'a str) -> PrintItems<'a> {
+  let mut items = PrintItems::new(arena);
   items.push_force_current_line_indentation();
-  items.extend(ir_helpers::gen_from_raw_string(text));
+  items.extend(ir_helpers::gen_from_raw_string(arena, text));
   items
 }
 
-fn gen_word(token: &Token, is_keyword: bool, context: &Context) -> PrintItems {
-  let mut items = PrintItems::new();
+fn gen_word<'a>(token: &Token<'a>, is_keyword: bool, context: &Context<'a>) -> PrintItems<'a> {
+  let mut items = PrintItems::new(context.arena);
   match (is_keyword, context.config.uppercase) {
     (true, UppercaseKind::Upper) => items.push_string(token.text.to_ascii_uppercase()),
     (true, UppercaseKind::Lower) => items.push_string(token.text.to_ascii_lowercase()),
@@ -2232,12 +2263,12 @@ fn gen_word(token: &Token, is_keyword: bool, context: &Context) -> PrintItems {
   items
 }
 
-fn gen_keyword(token: &Token, context: &Context) -> PrintItems {
+fn gen_keyword<'a>(token: &Token<'a>, context: &Context<'a>) -> PrintItems<'a> {
   gen_word(token, token.kind == TokenKind::Word, context)
 }
 
-fn gen_keywords(tokens: &[Tok], context: &Context) -> PrintItems {
-  let mut items = PrintItems::new();
+fn gen_keywords<'a>(tokens: &[Tok<'a>], context: &Context<'a>) -> PrintItems<'a> {
+  let mut items = PrintItems::new(context.arena);
   for (i, token) in tokens.iter().enumerate() {
     if i > 0 {
       items.push_space();
@@ -2250,19 +2281,19 @@ fn gen_keywords(tokens: &[Tok], context: &Context) -> PrintItems {
 /// The code in a dollar-quoted string, such as the body of a PL/pgSQL function, which is
 /// formatted as SQL when it can be. The code starts on the line after the opening quote, without
 /// any indentation, since it's still the contents of a string.
-fn gen_code_body(token: &Token, context: &mut Context) -> PrintItems {
+fn gen_code_body<'a>(token: &Token<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
   let text = token.text;
   let tag_len = text[1..].find('$').map(|i| i + 2).unwrap_or(text.len());
   if text.len() < tag_len * 2 {
-    return gen_raw_text(text);
+    return gen_raw_text(context.arena, text);
   }
   let tag = &text[..tag_len];
   let inner = &text[tag_len..text.len() - tag_len];
   if inner.trim().is_empty() {
-    return gen_raw_text(text);
+    return gen_raw_text(context.arena, text);
   }
   let Some(formatted) = crate::format_text::format_embedded(inner, context.config) else {
-    return gen_raw_text(text);
+    return gen_raw_text(context.arena, text);
   };
   let formatted = formatted.trim_end_matches('\n');
   let result = if !inner.contains('\n') && !formatted.contains('\n') {
@@ -2270,7 +2301,7 @@ fn gen_code_body(token: &Token, context: &mut Context) -> PrintItems {
   } else {
     format!("{tag}\n{formatted}\n{tag}")
   };
-  gen_raw_text(&result)
+  gen_raw_text(context.arena, context.arena.bump().alloc_str(&result))
 }
 
 /// Whether a space goes between the element at `i` and the one before it, neither of which is a
@@ -2424,31 +2455,31 @@ fn is_unary_position(elements: &[Element], i: usize) -> bool {
 
 // ---- comments ----
 
-fn gen_comment(token: &Token) -> PrintItems {
+fn gen_comment<'a>(arena: &'a Arena, token: &Token<'a>) -> PrintItems<'a> {
   match token.kind {
     TokenKind::LineComment | TokenKind::TemplateLine => {
       let text = token.text.trim_end_matches([' ', '\t']);
       // a template tag spanning lines (ex. `{% if a` then `and b %}`) is written as it is
       let mut items = if token.is_multi_line() {
-        gen_raw_text(text)
+        gen_raw_text(arena, text)
       } else {
-        ir_helpers::gen_from_string(text)
+        ir_helpers::gen_from_string(arena, text)
       };
       items.push_signal(Signal::ExpectNewLine);
       items
     }
-    _ if token.is_multi_line() => gen_raw_text(token.text),
-    _ => ir_helpers::gen_from_string(token.text),
+    _ if token.is_multi_line() => gen_raw_text(arena, token.text),
+    _ => ir_helpers::gen_from_string(arena, token.text),
   }
 }
 
 /// Comments that start lines of their own before something, which keep whatever was on the line
 /// after them on that line, and otherwise end it. `next` is the first token of what they're
 /// before.
-fn gen_leading_comments(comments: &[Tok], next: Option<Tok>) -> PrintItems {
-  let mut items = PrintItems::new();
+fn gen_leading_comments<'a>(arena: &'a Arena, comments: &[Tok<'a>], next: Option<Tok<'a>>) -> PrintItems<'a> {
+  let mut items = PrintItems::new(arena);
   for (i, comment) in comments.iter().enumerate() {
-    items.extend(gen_comment(comment));
+    items.extend(gen_comment(arena, comment));
     let following = comments.get(i + 1).copied().or(next);
     if !comment.is_line_comment() && following.is_some_and(|t| t.newlines_before == 0) {
       // a block comment against what follows stays against it (ex. MySQL's `/*!50705 x,*/'a'`)
@@ -2462,32 +2493,34 @@ fn gen_leading_comments(comments: &[Tok], next: Option<Tok>) -> PrintItems {
   items
 }
 
-fn gen_trailing_comment(token: &Token) -> PrintItems {
-  let mut items = space_if_not_start_of_line();
-  items.extend(gen_comment(token));
+fn gen_trailing_comment<'a>(arena: &'a Arena, token: &Token<'a>) -> PrintItems<'a> {
+  let mut items = space_if_not_start_of_line(arena);
+  items.extend(gen_comment(arena, token));
   items
 }
 
-fn space_if_not_start_of_line() -> PrintItems {
+fn space_if_not_start_of_line<'a>(arena: &'a Arena) -> PrintItems<'a> {
   if_false(
     "spaceIfNotStartOfLine",
     condition_resolvers::is_start_of_line(),
-    " ".into(),
+    " ".into_print_items(arena),
   )
-  .into()
+  .into_print_items(arena)
 }
 
 /// The space after a keyword and before the element that follows it, or a line break when that
 /// element is a comment on a line of its own.
-fn space_or_comment_spacing(next: &Element) -> PrintItems {
+fn space_or_comment_spacing<'a>(arena: &'a Arena, next: &Element<'a>) -> PrintItems<'a> {
   match next.as_token() {
-    Some(token) if token.is_comment() && token.newlines_before > 0 => Signal::NewLine.into(),
-    _ => space_if_not_start_of_line(),
+    Some(token) if token.is_comment() && token.newlines_before > 0 => Signal::NewLine.into_print_items(arena),
+    _ => space_if_not_start_of_line(arena),
   }
 }
 
-fn space_or_comment_spacing_opt(next: Option<&Element>) -> PrintItems {
-  next.map(space_or_comment_spacing).unwrap_or_default()
+fn space_or_comment_spacing_opt<'a>(arena: &'a Arena, next: Option<&Element<'a>>) -> PrintItems<'a> {
+  next
+    .map(|next| space_or_comment_spacing(arena, next))
+    .unwrap_or_else(|| PrintItems::new(arena))
 }
 
 // ---- helpers ----

@@ -5,11 +5,12 @@ use std::path::Path;
 
 use dprint_core::configuration::NewLineKind;
 use dprint_core::configuration::resolve_new_line_kind;
+use dprint_core::formatting::ArenaPool;
 
 use super::configuration::Configuration;
 use crate::ast::Item;
 use crate::error::FormatError;
-use crate::format_text::format_text;
+use crate::format_text::format_text_with_arena_pool;
 use crate::format_text::has_ignore_file_comment;
 use crate::format_text::lex;
 use crate::format_text::parse;
@@ -33,12 +34,24 @@ pub fn format_text_range(
   range: Range<usize>,
   config: &Configuration,
 ) -> Result<Option<String>, FormatError> {
+  format_text_range_with_arena_pool(file_path, text, range, config, None)
+}
+
+/// Formats the range, creating the arena from the pool when one is provided so its memory is
+/// reused between formats.
+pub(crate) fn format_text_range_with_arena_pool(
+  file_path: &Path,
+  text: &str,
+  range: Range<usize>,
+  config: &Configuration,
+  arena_pool: Option<&ArenaPool>,
+) -> Result<Option<String>, FormatError> {
   let body = strip_bom(text);
   let bom_len = text.len() - body.len();
   let end = range.end.saturating_sub(bom_len).min(body.len());
   let range = range.start.saturating_sub(bom_len).min(end)..end;
   if range.start == 0 && range.end == body.len() {
-    return format_text(file_path, text, config);
+    return format_text_with_arena_pool(file_path, text, config, arena_pool);
   }
 
   let tokens = lex(body, config.dialect)?;
@@ -52,12 +65,12 @@ pub fn format_text_range(
     return Ok(None);
   };
   if touched == (0..=items.len() - 1) {
-    return format_text(file_path, text, config);
+    return format_text_with_arena_pool(file_path, text, config, arena_pool);
   }
 
   let (first, last) = touched.into_inner();
   let original = lines_range(body, spans[first].start..spans[last].end);
-  let formatted = print_items(&items[first..=last], body, config);
+  let formatted = print_items(&items[first..=last], body, config, arena_pool);
   let spliced = format!(
     "{}{}{}",
     &body[..original.start],
