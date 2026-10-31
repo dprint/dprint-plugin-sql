@@ -443,7 +443,8 @@ fn gen_case_statement<'a>(statement: &CaseStatement<'a>, context: &mut Context<'
 }
 
 fn gen_label<'a>(arena: &'a Arena, label: &Label<'a>) -> PrintItems<'a> {
-  let mut text = bumpalo::collections::String::new_in(arena.bump());
+  let len = label.tokens.iter().map(|token| token.text.len()).sum();
+  let mut text = bumpalo::collections::String::with_capacity_in(len, arena.bump());
   for token in &label.tokens {
     text.push_str(token.text);
   }
