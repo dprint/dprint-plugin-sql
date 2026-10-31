@@ -10,6 +10,7 @@ use dprint_core::formatting::ArenaPool;
 use super::configuration::Configuration;
 use crate::ast::Item;
 use crate::error::FormatError;
+use crate::format_text::create_arena;
 use crate::format_text::format_text_with_arena_pool;
 use crate::format_text::has_ignore_file_comment;
 use crate::format_text::lex;
@@ -54,30 +55,33 @@ pub(crate) fn format_text_range_with_arena_pool(
     return format_text_with_arena_pool(file_path, text, config, arena_pool);
   }
 
-  let tokens = lex(body, config.dialect)?;
-  if has_ignore_file_comment(&tokens) {
+  let arena = create_arena(arena_pool);
+  let tokens = lex(body, config.dialect, &arena)?;
+  if has_ignore_file_comment(tokens) {
     return Ok(None);
   }
-  let list = parse(&tokens, body, config.dialect)?;
-  let items = &list.items;
+  let list = parse(tokens, body, config.dialect, &arena)?;
+  let items = list.items;
   let spans: Vec<Range<usize>> = items.iter().map(item_span).collect();
   let Some(touched) = find_touched(body, items, &spans, &range) else {
     return Ok(None);
   };
   if touched == (0..=items.len() - 1) {
+    // the whole file is formatted in an arena of its own, so this one's memory can be reused
+    drop(arena);
     return format_text_with_arena_pool(file_path, text, config, arena_pool);
   }
 
   let (first, last) = touched.into_inner();
   let original = lines_range(body, spans[first].start..spans[last].end);
-  let formatted = print_items(&items[first..=last], body, config, arena_pool);
+  let formatted = print_items(&items[first..=last], body, config, &arena);
   let spliced = format!(
     "{}{}{}",
     &body[..original.start],
     with_file_new_lines(&formatted, body),
     &body[original.end..]
   );
-  verify(&tokens, &spliced, config)?;
+  verify(tokens, &spliced, config, &arena)?;
   let result = format!("{}{}", &text[..bom_len], spliced);
   Ok(if result == text { None } else { Some(result) })
 }

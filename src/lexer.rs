@@ -8,6 +8,9 @@
 
 use std::ops::Range;
 
+use dprint_core::formatting::bumpalo::Bump;
+use dprint_core::formatting::bumpalo::collections::Vec as BumpVec;
+
 use crate::configuration::Dialect;
 use crate::keywords;
 
@@ -109,13 +112,14 @@ pub struct LexError {
   pub span: Range<usize>,
 }
 
-pub fn lex(text: &str, dialect: Dialect) -> Result<Vec<Token<'_>>, LexError> {
+/// Splits the text into tokens, which are allocated in `bump`.
+pub fn lex<'t, 'b>(text: &'t str, dialect: Dialect, bump: &'b Bump) -> Result<&'b [Token<'t>], LexError> {
   let mut lexer = Lexer {
     text,
     pos: 0,
     dialect,
     delimiter: None,
-    tokens: Vec::new(),
+    tokens: BumpVec::new_in(bump),
     newlines: 0,
     space: false,
     line_start: true,
@@ -123,16 +127,16 @@ pub fn lex(text: &str, dialect: Dialect) -> Result<Vec<Token<'_>>, LexError> {
     last_significant: None,
   };
   lexer.run()?;
-  Ok(lexer.tokens)
+  Ok(lexer.tokens.into_bump_slice())
 }
 
-struct Lexer<'a> {
+struct Lexer<'a, 'b> {
   text: &'a str,
   pos: usize,
   dialect: Dialect,
   /// The statement terminator set by a MySQL `DELIMITER` command, when it isn't `;`.
   delimiter: Option<&'a str>,
-  tokens: Vec<Token<'a>>,
+  tokens: BumpVec<'b, Token<'a>>,
   newlines: u32,
   space: bool,
   /// Whether only whitespace precedes the current position on its line.
@@ -143,7 +147,7 @@ struct Lexer<'a> {
   last_significant: Option<TokenKind>,
 }
 
-impl<'a> Lexer<'a> {
+impl<'a> Lexer<'a, '_> {
   fn run(&mut self) -> Result<(), LexError> {
     loop {
       self.skip_whitespace();
@@ -1349,14 +1353,17 @@ fn is_operator_char(c: char) -> bool {
   )
 }
 
+// the tokens are allocated in the arena, which doesn't run destructors
+const _: () = assert!(!std::mem::needs_drop::<Token<'static>>());
+
 #[cfg(test)]
 mod test {
   use super::*;
 
   fn tokens(text: &str, dialect: Dialect) -> Vec<(TokenKind, &str)> {
-    lex(text, dialect)
+    lex(text, dialect, &Bump::new())
       .unwrap()
-      .into_iter()
+      .iter()
       .map(|t| (t.kind, t.text))
       .collect()
   }
@@ -1391,7 +1398,8 @@ mod test {
 
   #[test]
   fn records_whitespace_before_tokens() {
-    let tokens = lex("a  b\n\nc(d)", Dialect::Generic).unwrap();
+    let bump = Bump::new();
+    let tokens = lex("a  b\n\nc(d)", Dialect::Generic, &bump).unwrap();
     assert_eq!(
       tokens
         .iter()
@@ -1450,7 +1458,7 @@ mod test {
       tokens("$action $1", Dialect::SqlServer),
       vec![(Variable, "$action"), (Variable, "$1")]
     );
-    assert!(lex("$$ unterminated", Dialect::PostgreSql).is_err());
+    assert!(lex("$$ unterminated", Dialect::PostgreSql, &Bump::new()).is_err());
   }
 
   #[test]
@@ -1496,7 +1504,7 @@ mod test {
     assert_eq!(texts("/* x /* y */ z", Dialect::MySql), vec!["/* x /* y */", "z"]);
     // the generic dialect falls back to not nesting when that's the only way the comment ends
     assert_eq!(texts("/* x /* y */ z", Dialect::Generic), vec!["/* x /* y */", "z"]);
-    assert!(lex("/* x", Dialect::Generic).is_err());
+    assert!(lex("/* x", Dialect::Generic, &Bump::new()).is_err());
   }
 
   #[test]
@@ -1811,7 +1819,7 @@ mod test {
       ("{{ abc", Dialect::Generic, "unterminated template tag"),
       ("q'[abc'", Dialect::Oracle, "unterminated string"),
     ] {
-      let error = lex(text, dialect).unwrap_err();
+      let error = lex(text, dialect, &Bump::new()).unwrap_err();
       assert_eq!(error.message, message, "{text}");
       assert_eq!(error.span.start, 0);
     }
@@ -1820,10 +1828,11 @@ mod test {
   #[test]
   fn is_lossless() {
     let text = "SELECT  a,\n  'x' -- c\n  /* d */ FROM [t]  ;\n";
-    let tokens = lex(text, Dialect::SqlServer).unwrap();
+    let bump = Bump::new();
+    let tokens = lex(text, Dialect::SqlServer, &bump).unwrap();
     let mut rebuilt = std::string::String::new();
     let mut last_end = 0;
-    for token in &tokens {
+    for token in tokens {
       assert!(text[last_end..token.start].trim().is_empty());
       rebuilt.push_str(&text[last_end..token.start]);
       rebuilt.push_str(token.text);
