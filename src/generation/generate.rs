@@ -8,6 +8,7 @@ use dprint_core::formatting::ir_helpers::MultiLineOptions;
 use dprint_core::formatting::ir_helpers::SingleLineOptions;
 use dprint_core::formatting::*;
 
+use super::BumpVec;
 use super::Context;
 use crate::ast::*;
 use crate::configuration::UppercaseKind;
@@ -207,7 +208,7 @@ fn gen_statement_elements<'a>(elements: &[Element<'a>], context: &mut Context<'a
 
 /// A run of elements without procedural code, which is laid out as clauses each starting a line.
 fn gen_run<'a>(elements: &[Element<'a>], declarations_follow: bool, context: &mut Context<'a>) -> PrintItems<'a> {
-  let clauses = split_clauses_ex(elements, declarations_follow);
+  let clauses = split_clauses_ex(context.arena, elements, declarations_follow);
   // a query that a cursor is declared or opened for, or that's returned, is indented beneath the
   // statement's head when it doesn't fit on its line
   let first_word = elements.iter().find(|e| !e.is_comment());
@@ -412,7 +413,7 @@ fn gen_loop_header<'a>(header: &[Element<'a>], context: &mut Context<'a>) -> Pri
   };
   let last = header.len() - 1;
   let mut items = gen_fill(&header[..query_start], context);
-  let clauses = split_clauses(&header[query_start..last]);
+  let clauses = split_clauses(context.arena, &header[query_start..last]);
   let force = clauses.iter().any(|clause| clause.is_known_multi_line());
   items.extend(gen_clauses_fit(&clauses, force, ClausesLayout::BetweenWords, context));
   items.extend(gen_fill(&header[last..], context));
@@ -442,8 +443,11 @@ fn gen_case_statement<'a>(statement: &CaseStatement<'a>, context: &mut Context<'
 }
 
 fn gen_label<'a>(arena: &'a Arena, label: &Label<'a>) -> PrintItems<'a> {
-  let text: String = label.tokens.iter().map(|token| token.text).collect();
-  ir_helpers::gen_from_string(arena, arena.bump().alloc_str(&text))
+  let mut text = bumpalo::collections::String::new_in(arena.bump());
+  for token in &label.tokens {
+    text.push_str(token.text);
+  }
+  ir_helpers::gen_from_string(arena, text.into_bump_str())
 }
 
 // ---- clauses ----
@@ -479,7 +483,7 @@ enum ClauseKind {
 struct Clause<'e, 'a> {
   kind: ClauseKind,
   /// Comments on lines of their own above the clause.
-  leading_comments: Vec<Tok<'a>>,
+  leading_comments: BumpVec<'e, Tok<'a>>,
   keyword: &'e [Element<'a>],
   body: &'e [Element<'a>],
 }
@@ -509,13 +513,18 @@ enum Mode {
 
 /// Splits a run of elements into clauses, each of which starts a line when the run is written over
 /// several lines.
-fn split_clauses<'e, 'a>(elements: &'e [Element<'a>]) -> Vec<Clause<'e, 'a>> {
-  split_clauses_ex(elements, false)
+fn split_clauses<'e, 'a>(arena: &'e Arena, elements: &'e [Element<'a>]) -> BumpVec<'e, Clause<'e, 'a>> {
+  split_clauses_ex(arena, elements, false)
 }
 
 /// Like `split_clauses`, where `declarations_follow` says the declarations of an Oracle routine
 /// come next.
-fn split_clauses_ex<'e, 'a>(elements: &'e [Element<'a>], declarations_follow: bool) -> Vec<Clause<'e, 'a>> {
+fn split_clauses_ex<'e, 'a>(
+  arena: &'e Arena,
+  elements: &'e [Element<'a>],
+  declarations_follow: bool,
+) -> BumpVec<'e, Clause<'e, 'a>> {
+  let bump = arena.bump();
   let mode = detect_mode(elements);
   let mut scan = ClauseScan {
     mode,
@@ -535,7 +544,8 @@ fn split_clauses_ex<'e, 'a>(elements: &'e [Element<'a>], declarations_follow: bo
     dml_start: elements.iter().position(|e| !e.is_comment()).unwrap_or(0),
   };
   // (start, keyword length, kind)
-  let mut starts: Vec<(usize, usize, ClauseKind)> = vec![(0, 0, ClauseKind::Head)];
+  let mut starts: BumpVec<(usize, usize, ClauseKind)> = BumpVec::new_in(bump);
+  starts.push((0, 0, ClauseKind::Head));
   if let Some(start) = scan.special_head_end(elements) {
     starts.push((start, 0, ClauseKind::InlineList));
   }
@@ -565,8 +575,8 @@ fn split_clauses_ex<'e, 'a>(elements: &'e [Element<'a>], declarations_follow: bo
     i += 1;
   }
 
-  let mut clauses: Vec<Clause> = Vec::with_capacity(starts.len());
-  let mut pending: Vec<Tok<'a>> = Vec::new();
+  let mut clauses: BumpVec<Clause> = BumpVec::with_capacity_in(starts.len(), bump);
+  let mut pending: BumpVec<Tok<'a>> = BumpVec::new_in(bump);
   for (index, (start, keyword_len, kind)) in starts.iter().enumerate() {
     let end = starts
       .get(index + 1)
@@ -574,14 +584,14 @@ fn split_clauses_ex<'e, 'a>(elements: &'e [Element<'a>], declarations_follow: bo
       .unwrap_or(elements.len());
     let keyword = &elements[*start..start + keyword_len];
     let mut body = &elements[start + keyword_len..end];
-    let leading_comments = std::mem::take(&mut pending);
+    let leading_comments = std::mem::replace(&mut pending, BumpVec::new_in(bump));
     // comments on lines of their own at the end of a clause introduce the next one
     if let Some((_, _, next_kind)) = starts.get(index + 1)
       && *kind != ClauseKind::InlineList
       && *next_kind != ClauseKind::InlineList
     {
       let split = own_line_comments_start(body);
-      pending = body[split..].iter().filter_map(|e| e.as_token()).collect();
+      pending = BumpVec::from_iter_in(body[split..].iter().filter_map(|e| e.as_token()), bump);
       body = &body[..split];
     }
     clauses.push(Clause {
@@ -1283,19 +1293,20 @@ fn gen_clauses_fit<'a>(
   context: &mut Context<'a>,
 ) -> PrintItems<'a> {
   let indent_width = context.config.indent_width;
+  let arena = context.arena;
   gen_nested_separated_values(
     context,
     |context| {
-      clauses
-        .iter()
-        .map(|clause| GeneratedValue {
+      BumpVec::from_iter_in(
+        clauses.iter().map(|clause| GeneratedValue {
           items: gen_clause(clause, context),
           lines_span: None,
           allow_inline_multi_line: false,
           allow_inline_single_line: false,
           is_known_multi_line: clause.is_known_multi_line(),
-        })
-        .collect()
+        }),
+        arena.bump(),
+      )
     },
     GenSeparatedValuesOptions {
       prefer_hanging: false,
@@ -1332,13 +1343,13 @@ enum ListStyle {
 
 struct ListItem<'e, 'a> {
   /// Comments on lines of their own before the item.
-  leading_comments: Vec<Tok<'a>>,
+  leading_comments: BumpVec<'e, Tok<'a>>,
   elements: &'e [Element<'a>],
   comma: Option<Tok<'a>>,
   /// Comments on the item's last line.
-  trailing_comments: Vec<Tok<'a>>,
+  trailing_comments: BumpVec<'e, Tok<'a>>,
   /// Comments on lines of their own after the last item.
-  after_comments: Vec<Tok<'a>>,
+  after_comments: BumpVec<'e, Tok<'a>>,
   blank_line_before: bool,
 }
 
@@ -1359,8 +1370,9 @@ impl ListItem<'_, '_> {
 }
 
 /// Splits a comma separated list into its items, giving each the comments around it.
-fn split_list<'e, 'a>(elements: &'e [Element<'a>]) -> Vec<ListItem<'e, 'a>> {
-  let mut segments: Vec<(&'e [Element<'a>], Option<Tok<'a>>)> = Vec::new();
+fn split_list<'e, 'a>(arena: &'e Arena, elements: &'e [Element<'a>]) -> BumpVec<'e, ListItem<'e, 'a>> {
+  let bump = arena.bump();
+  let mut segments: BumpVec<(&'e [Element<'a>], Option<Tok<'a>>)> = BumpVec::new_in(bump);
   let mut start = 0;
   let angle_types = angle_bracket_types(elements);
   for (i, element) in elements.iter().enumerate() {
@@ -1374,8 +1386,8 @@ fn split_list<'e, 'a>(elements: &'e [Element<'a>]) -> Vec<ListItem<'e, 'a>> {
   }
   segments.push((&elements[start..], None));
 
-  let mut items: Vec<ListItem> = Vec::with_capacity(segments.len());
-  let mut carried: Vec<Tok> = Vec::new();
+  let mut items: BumpVec<ListItem> = BumpVec::with_capacity_in(segments.len(), bump);
+  let mut carried: BumpVec<Tok> = BumpVec::new_in(bump);
   let count = segments.len();
   for (index, (segment, comma)) in segments.into_iter().enumerate() {
     let mut segment = segment;
@@ -1390,7 +1402,7 @@ fn split_list<'e, 'a>(elements: &'e [Element<'a>]) -> Vec<ListItem<'e, 'a>> {
         segment = &segment[1..];
       }
     }
-    let mut leading_comments = std::mem::take(&mut carried);
+    let mut leading_comments = std::mem::replace(&mut carried, BumpVec::new_in(bump));
     while let Some(token) = segment
       .first()
       .and_then(|e| e.as_token())
@@ -1410,8 +1422,8 @@ fn split_list<'e, 'a>(elements: &'e [Element<'a>]) -> Vec<ListItem<'e, 'a>> {
             .is_some_and(|t| t.is_line_comment() || (t.is_comment() && t.newlines_before > 0))
         })
         .count();
-    let mut trailing_comments = Vec::new();
-    let mut after_comments = Vec::new();
+    let mut trailing_comments = BumpVec::new_in(bump);
+    let mut after_comments = BumpVec::new_in(bump);
     for element in &segment[comments_start..] {
       let token = element.as_token().unwrap();
       if token.newlines_before > 0 || !after_comments.is_empty() {
@@ -1422,7 +1434,7 @@ fn split_list<'e, 'a>(elements: &'e [Element<'a>]) -> Vec<ListItem<'e, 'a>> {
     }
     let content = &segment[..comments_start];
     if index + 1 < count {
-      carried = std::mem::take(&mut after_comments);
+      carried = std::mem::replace(&mut after_comments, BumpVec::new_in(bump));
     }
     if content.is_empty()
       && comma.is_none()
@@ -1470,7 +1482,7 @@ fn gen_list<'a>(elements: &[Element<'a>], style: ListStyle, force: bool, context
     }
     return items;
   }
-  let items = split_list(elements);
+  let items = split_list(context.arena, elements);
   if items.is_empty() {
     return PrintItems::new(context.arena);
   }
@@ -1506,7 +1518,7 @@ fn gen_list<'a>(elements: &[Element<'a>], style: ListStyle, force: bool, context
     context,
     |context| {
       let mut line = 0;
-      let mut values = Vec::with_capacity(count);
+      let mut values = BumpVec::with_capacity_in(count, context.arena.bump());
       for (i, item) in items.iter().enumerate() {
         if i > 0 {
           line += if item.blank_line_before { 2 } else { 1 };
@@ -1572,7 +1584,7 @@ fn gen_list_item<'a>(item: &ListItem<'_, 'a>, context: &mut Context<'a>) -> Prin
   ));
   items.extend(gen_fill(item.elements, context));
   if item.comma.is_some() {
-    items.push_str(",");
+    items.push_str_runtime_width_computed(",");
   }
   for comment in &item.trailing_comments {
     items.extend(gen_trailing_comment(context.arena, comment));
@@ -1587,7 +1599,7 @@ fn gen_list_item<'a>(item: &ListItem<'_, 'a>, context: &mut Context<'a>) -> Prin
 // ---- conditions ----
 
 struct ConditionPart<'e, 'a> {
-  leading_comments: Vec<Tok<'a>>,
+  leading_comments: BumpVec<'e, Tok<'a>>,
   /// The `AND` or `OR` before the condition, or the `ON` of a join.
   operator: Option<Tok<'a>>,
   elements: &'e [Element<'a>],
@@ -1608,8 +1620,9 @@ impl ConditionPart<'_, '_> {
 
 /// Splits conditions at the `AND` and `OR` between them, which doesn't include the `AND` of a
 /// `BETWEEN`.
-fn split_conditions<'e, 'a>(elements: &'e [Element<'a>]) -> Vec<ConditionPart<'e, 'a>> {
-  let mut parts = Vec::new();
+fn split_conditions<'e, 'a>(arena: &'e Arena, elements: &'e [Element<'a>]) -> BumpVec<'e, ConditionPart<'e, 'a>> {
+  let bump = arena.bump();
+  let mut parts = BumpVec::new_in(bump);
   let mut start = 0;
   let mut operator = None;
   let mut in_between = false;
@@ -1629,16 +1642,16 @@ fn split_conditions<'e, 'a>(elements: &'e [Element<'a>]) -> Vec<ConditionPart<'e
   }
   parts.push((operator, &elements[start..]));
 
-  let mut result: Vec<ConditionPart> = Vec::with_capacity(parts.len());
-  let mut carried = Vec::new();
+  let mut result: BumpVec<ConditionPart> = BumpVec::with_capacity_in(parts.len(), bump);
+  let mut carried = BumpVec::new_in(bump);
   let count = parts.len();
   for (index, (operator, part)) in parts.into_iter().enumerate() {
     let mut part = part;
-    let leading_comments = std::mem::take(&mut carried);
+    let leading_comments = std::mem::replace(&mut carried, BumpVec::new_in(bump));
     if index + 1 < count {
       // comments on lines of their own before an `AND` introduce the condition after it
       let split = own_line_comments_start(part);
-      carried = part[split..].iter().filter_map(|e| e.as_token()).collect();
+      carried = BumpVec::from_iter_in(part[split..].iter().filter_map(|e| e.as_token()), bump);
       part = &part[..split];
     }
     result.push(ConditionPart {
@@ -1653,7 +1666,7 @@ fn split_conditions<'e, 'a>(elements: &'e [Element<'a>]) -> Vec<ConditionPart<'e
 /// Conditions after a keyword, of which the first stays on the keyword's line and the rest are
 /// indented on lines of their own when they don't fit (ex. `WHERE a = 1` then `  AND b = 2`).
 fn gen_conditions_hanging<'a>(elements: &[Element<'a>], context: &mut Context<'a>) -> PrintItems<'a> {
-  let parts = split_conditions(elements);
+  let parts = split_conditions(context.arena, elements);
   gen_condition_parts(
     None,
     &parts,
@@ -1678,7 +1691,7 @@ fn gen_condition_parts<'a>(
   gen_nested_separated_values(
     context,
     |context| {
-      let mut values = Vec::with_capacity(parts.len() + 1);
+      let mut values = BumpVec::with_capacity_in(parts.len() + 1, context.arena.bump());
       if let Some(first) = first {
         values.push(GeneratedValue::from_items(first));
       }
@@ -1723,7 +1736,8 @@ fn gen_condition_part<'a>(part: &ConditionPart<'_, 'a>, context: &mut Context<'a
 // ---- from and joins ----
 
 fn gen_from<'a>(body: &[Element<'a>], force_list: bool, context: &mut Context<'a>) -> PrintItems<'a> {
-  let mut join_starts = Vec::new();
+  let bump = context.arena.bump();
+  let mut join_starts = BumpVec::new_in(bump);
   let mut i = 0;
   while i < body.len() {
     if let Some(len) = join_keyword_len(body, i) {
@@ -1735,10 +1749,10 @@ fn gen_from<'a>(body: &[Element<'a>], force_list: bool, context: &mut Context<'a
   }
   let refs_end = join_starts.first().map(|(start, _)| *start).unwrap_or(body.len());
   let mut refs = &body[..refs_end];
-  let mut pending = Vec::new();
+  let mut pending = BumpVec::new_in(bump);
   if !join_starts.is_empty() {
     let split = own_line_comments_start(refs);
-    pending = refs[split..].iter().filter_map(|e| e.as_token()).collect();
+    pending = BumpVec::from_iter_in(refs[split..].iter().filter_map(|e| e.as_token()), bump);
     refs = &refs[..split];
   }
 
@@ -1749,10 +1763,10 @@ fn gen_from<'a>(body: &[Element<'a>], force_list: bool, context: &mut Context<'a
       .map(|(start, _)| *start)
       .unwrap_or(body.len());
     let mut rest = &body[start + len..end];
-    let leading_comments = std::mem::take(&mut pending);
+    let leading_comments = std::mem::replace(&mut pending, BumpVec::new_in(bump));
     if index + 1 < join_starts.len() {
       let split = own_line_comments_start(rest);
-      pending = rest[split..].iter().filter_map(|e| e.as_token()).collect();
+      pending = BumpVec::from_iter_in(rest[split..].iter().filter_map(|e| e.as_token()), bump);
       rest = &rest[..split];
     }
     let mut join = PrintItems::new(context.arena);
@@ -1817,7 +1831,7 @@ fn gen_join<'a>(keyword: &[Element<'a>], rest: &[Element<'a>], context: &mut Con
   match rest.iter().position(|e| e.is_word("ON")) {
     Some(on_index) if on_index > 0 => {
       let table = gen_fill(&rest[..on_index], context);
-      let mut parts = split_conditions(&rest[on_index + 1..]);
+      let mut parts = split_conditions(context.arena, &rest[on_index + 1..]);
       parts[0].operator = rest[on_index].as_token();
       items.extend(gen_condition_parts(
         Some(table),
@@ -1837,7 +1851,7 @@ fn gen_join<'a>(keyword: &[Element<'a>], rest: &[Element<'a>], context: &mut Con
 /// The common table expressions after a `WITH`, each starting a line of its own after the first.
 fn gen_with<'a>(body: &[Element<'a>], context: &mut Context<'a>) -> PrintItems<'a> {
   let mut items = PrintItems::new(context.arena);
-  for (i, item) in split_list(body).iter().enumerate() {
+  for (i, item) in split_list(context.arena, body).iter().enumerate() {
     if i > 0 {
       items.push_signal(Signal::NewLine);
     }
@@ -1897,11 +1911,11 @@ fn gen_group<'a>(group: &Group<'a>, context: &mut Context<'a>) -> PrintItems<'a>
 
   let force = group_forces_multi_line(group);
   if is_query_start(elements) || (group.is_paren() && detect_mode(elements) == Mode::Window) {
-    let clauses = split_clauses(elements);
+    let clauses = split_clauses(context.arena, elements);
     let force = force || clauses.iter().any(|clause| clause.is_known_multi_line());
     items.extend(gen_clauses_fit(&clauses, force, ClausesLayout::InBrackets, context));
   } else if !elements.iter().any(|e| e.is_kind(TokenKind::Comma)) && has_condition_operator(elements) {
-    let parts = split_conditions(elements);
+    let parts = split_conditions(context.arena, elements);
     let force = force || parts.iter().any(|part| part.is_known_multi_line(false));
     items.extend(gen_condition_parts(
       None,
@@ -1941,7 +1955,6 @@ fn lone_group<'e, 'a>(elements: &'e [Element<'a>]) -> Option<&'e Group<'a>> {
   let Some(Element::Group(group)) = significant.next() else {
     return None;
   };
-  let rest: Vec<&Element> = significant.collect();
   let is_name = |e: &Element| {
     e.is_kind(TokenKind::QuotedIdent)
       || (e.is_kind(TokenKind::Word)
@@ -1949,10 +1962,10 @@ fn lone_group<'e, 'a>(elements: &'e [Element<'a>]) -> Option<&'e Group<'a>> {
           .as_token()
           .is_some_and(|t| keywords::contains(keywords::RESERVED, t.text)))
   };
-  let is_alias = match rest.as_slice() {
-    [] => true,
-    [name] => is_name(name),
-    [as_keyword, name] => as_keyword.is_word("AS") && is_name(name),
+  let is_alias = match (significant.next(), significant.next(), significant.next()) {
+    (None, _, _) => true,
+    (Some(name), None, _) => is_name(name),
+    (Some(as_keyword), Some(name), None) => as_keyword.is_word("AS") && is_name(name),
     _ => false,
   };
   is_alias.then_some(group)
@@ -1987,7 +2000,7 @@ fn gen_case<'a>(case: &Case<'a>, context: &mut Context<'a>) -> PrintItems<'a> {
     gen_nested_separated_values(
       context,
       |context| {
-        let mut values = Vec::with_capacity(branch_count);
+        let mut values = BumpVec::with_capacity_in(branch_count, context.arena.bump());
         for branch in &case.branches {
           let mut items = PrintItems::new(context.arena);
           items.extend(gen_leading_comments(
@@ -2233,7 +2246,7 @@ const MAX_FITTED_DEPTH: u32 = 12;
 
 fn gen_nested_separated_values<'a>(
   context: &mut Context<'a>,
-  gen_values: impl FnOnce(&mut Context<'a>) -> Vec<GeneratedValue<'a>>,
+  gen_values: impl FnOnce(&mut Context<'a>) -> BumpVec<'a, GeneratedValue<'a>>,
   mut opts: GenSeparatedValuesOptions<'a>,
 ) -> GenSeparatedValuesResult<'a> {
   context.separated_values_depth += 1;
@@ -2254,12 +2267,22 @@ fn gen_raw_text<'a>(arena: &'a Arena, text: &'a str) -> PrintItems<'a> {
 }
 
 fn gen_word<'a>(token: &Token<'a>, is_keyword: bool, context: &Context<'a>) -> PrintItems<'a> {
+  let text = match (is_keyword, context.config.uppercase) {
+    (true, UppercaseKind::Upper) if token.text.bytes().any(|b| b.is_ascii_lowercase()) => {
+      let text = context.arena.bump().alloc_str(token.text);
+      text.make_ascii_uppercase();
+      text
+    }
+    (true, UppercaseKind::Lower) if token.text.bytes().any(|b| b.is_ascii_uppercase()) => {
+      let text = context.arena.bump().alloc_str(token.text);
+      text.make_ascii_lowercase();
+      text
+    }
+    // the word is already in the configured case, or keeps its case
+    _ => token.text,
+  };
   let mut items = PrintItems::new(context.arena);
-  match (is_keyword, context.config.uppercase) {
-    (true, UppercaseKind::Upper) => items.push_string(token.text.to_ascii_uppercase()),
-    (true, UppercaseKind::Lower) => items.push_string(token.text.to_ascii_lowercase()),
-    _ => items.push_str(token.text),
-  }
+  items.push_str_runtime_width_computed(text);
   items
 }
 
@@ -2296,12 +2319,13 @@ fn gen_code_body<'a>(token: &Token<'a>, context: &mut Context<'a>) -> PrintItems
     return gen_raw_text(context.arena, text);
   };
   let formatted = formatted.trim_end_matches('\n');
+  let bump = context.arena.bump();
   let result = if !inner.contains('\n') && !formatted.contains('\n') {
-    format!("{tag} {formatted} {tag}")
+    bumpalo::format!(in bump, "{} {} {}", tag, formatted, tag)
   } else {
-    format!("{tag}\n{formatted}\n{tag}")
+    bumpalo::format!(in bump, "{}\n{}\n{}", tag, formatted, tag)
   };
-  gen_raw_text(context.arena, context.arena.bump().alloc_str(&result))
+  gen_raw_text(context.arena, result.into_bump_str())
 }
 
 /// Whether a space goes between the element at `i` and the one before it, neither of which is a
