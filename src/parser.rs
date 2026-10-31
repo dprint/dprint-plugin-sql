@@ -9,6 +9,10 @@
 use std::collections::HashSet;
 use std::ops::Range;
 
+use dprint_core::formatting::bumpalo;
+use dprint_core::formatting::bumpalo::Bump;
+use dprint_core::formatting::bumpalo::collections::Vec as BumpVec;
+
 use crate::ast::*;
 use crate::configuration::Dialect;
 use crate::keywords;
@@ -21,9 +25,11 @@ pub struct SyntaxError {
   pub span: Range<usize>,
 }
 
-pub fn parse<'a>(tokens: &'a [Token<'a>], dialect: Dialect) -> Result<StatementList<'a>, SyntaxError> {
+/// Parses the tokens into a tree, which is allocated in `bump`.
+pub fn parse<'a>(tokens: &'a [Token<'a>], dialect: Dialect, bump: &'a Bump) -> Result<StatementList<'a>, SyntaxError> {
   let mut parser = Parser {
     tokens,
+    bump,
     pos: 0,
     dialect,
     depth: 0,
@@ -68,6 +74,8 @@ struct Stops {
 
 struct Parser<'a> {
   tokens: &'a [Token<'a>],
+  /// Where the tree is allocated.
+  bump: &'a Bump,
   pos: usize,
   dialect: Dialect,
   depth: usize,
@@ -86,7 +94,7 @@ impl<'a> Parser<'a> {
   // ---- statement lists ----
 
   fn parse_list(&mut self, stops: Stops) -> Result<StatementList<'a>, SyntaxError> {
-    let mut items: Vec<Item<'a>> = Vec::new();
+    let mut items = BumpVec::new_in(self.bump);
     let mut ignore_next = false;
     while let Some(token) = self.peek() {
       if self.is_list_stop(token, stops) || is_closing(token) {
@@ -101,7 +109,7 @@ impl<'a> Parser<'a> {
           }) =>
         {
           self.pos += 1;
-          ItemKind::Statement(self.finish_statement(vec![Element::Token(token)], None))
+          ItemKind::Statement(self.finish_statement(bumpalo::vec![in self.bump; Element::Token(token)], None))
         }
         TokenKind::LineComment | TokenKind::BlockComment | TokenKind::TemplateLine => {
           self.pos += 1;
@@ -134,7 +142,9 @@ impl<'a> Parser<'a> {
         blank_line_before,
       });
     }
-    Ok(StatementList { items })
+    Ok(StatementList {
+      items: items.into_bump_slice(),
+    })
   }
 
   fn is_list_stop(&self, token: &Token, stops: Stops) -> bool {
@@ -152,7 +162,7 @@ impl<'a> Parser<'a> {
   // ---- statements ----
 
   fn parse_statement(&mut self, stops: Stops) -> Result<Statement<'a>, SyntaxError> {
-    let mut elements = Vec::new();
+    let mut elements = BumpVec::new_in(self.bump);
     // comments before a statement that isn't in a list, such as the body of a T-SQL `IF`
     while let Some(token) = self.peek().filter(|token| token.is_comment()) {
       elements.push(Element::Token(token));
@@ -164,7 +174,7 @@ impl<'a> Parser<'a> {
         && self
           .peek()
           .is_none_or(|token| token.starts_line() || !self.is_labelable(token));
-      elements.push(Element::Label(Box::new(label)));
+      elements.push(Element::Label(self.bump.alloc(label)));
       if standalone {
         // a T-SQL label for `GOTO`, which is a statement of its own
         return Ok(self.finish_statement(elements, None));
@@ -181,7 +191,7 @@ impl<'a> Parser<'a> {
       state.declarations = true;
     }
     if let Some(section) = self.parse_declare_section_at_start()? {
-      let element = Element::DeclareSection(Box::new(section));
+      let element = Element::DeclareSection(self.bump.alloc(section));
       state.update(&element);
       elements.push(element);
     }
@@ -229,7 +239,7 @@ impl<'a> Parser<'a> {
         break;
       }
       if is_routine_body_start && let Some(section) = self.parse_routine_declarations()? {
-        let element = Element::DeclareSection(Box::new(section));
+        let element = Element::DeclareSection(self.bump.alloc(section));
         state.update(&element);
         elements.push(element);
       }
@@ -237,7 +247,7 @@ impl<'a> Parser<'a> {
     Ok(self.finish_statement(elements, terminator))
   }
 
-  fn finish_statement(&mut self, elements: Vec<Element<'a>>, mut terminator: Option<Tok<'a>>) -> Statement<'a> {
+  fn finish_statement(&mut self, elements: BumpVec<'a, Element<'a>>, mut terminator: Option<Tok<'a>>) -> Statement<'a> {
     if terminator.is_none()
       && let Some(token) = self.peek().filter(|token| is_terminator(token))
     {
@@ -247,18 +257,18 @@ impl<'a> Parser<'a> {
     let trailing_comments = if terminator.is_some() || elements.last().is_some_and(|element| element.is_procedural()) {
       self.take_same_line_comments()
     } else {
-      Vec::new()
+      &[]
     };
     Statement {
-      elements,
+      elements: elements.into_bump_slice(),
       terminator,
       trailing_comments,
       ignored: false,
     }
   }
 
-  fn take_same_line_comments(&mut self) -> Vec<Tok<'a>> {
-    let mut comments = Vec::new();
+  fn take_same_line_comments(&mut self) -> &'a [Tok<'a>] {
+    let mut comments = BumpVec::new_in(self.bump);
     while let Some(token) = self
       .peek()
       .filter(|token| token.is_comment() && token.newlines_before == 0)
@@ -266,7 +276,7 @@ impl<'a> Parser<'a> {
       comments.push(token);
       self.pos += 1;
     }
-    comments
+    comments.into_bump_slice()
   }
 
   /// Whether `token` ends the statement being parsed rather than continuing it.
@@ -529,24 +539,24 @@ impl<'a> Parser<'a> {
       return Ok(None);
     }
     let result = if token.is_word("BEGIN") && self.is_block_begin(self.pos) {
-      self.parse_block()?.map(|block| Element::Block(Box::new(block)))
+      self.parse_block()?.map(|block| Element::Block(self.bump.alloc(block)))
     } else if token.is_word("IF") {
       if self.dialect != Dialect::SqlServer && self.has_procedural_keyword_ahead(&["THEN"]) {
-        self.parse_if()?.map(|block| Element::If(Box::new(block)))
+        self.parse_if()?.map(|block| Element::If(self.bump.alloc(block)))
       } else if self.allows_statements_without_semicolons() {
         self
           .parse_conditional(stops)?
-          .map(|conditional| Element::Conditional(Box::new(conditional)))
+          .map(|conditional| Element::Conditional(self.bump.alloc(conditional)))
       } else {
         None
       }
     } else if token.is_word("WHILE") {
       if self.has_procedural_keyword_ahead(&["LOOP", "DO"]) {
-        self.parse_loop()?.map(|block| Element::Loop(Box::new(block)))
+        self.parse_loop()?.map(|block| Element::Loop(self.bump.alloc(block)))
       } else if self.allows_statements_without_semicolons() {
         self
           .parse_conditional(stops)?
-          .map(|conditional| Element::Conditional(Box::new(conditional)))
+          .map(|conditional| Element::Conditional(self.bump.alloc(conditional)))
       } else {
         None
       }
@@ -554,13 +564,13 @@ impl<'a> Parser<'a> {
       && self.dialect != Dialect::SqlServer
       && self.has_procedural_keyword_ahead(&["LOOP", "DO"])
     {
-      self.parse_loop()?.map(|block| Element::Loop(Box::new(block)))
+      self.parse_loop()?.map(|block| Element::Loop(self.bump.alloc(block)))
     } else if (token.is_word("LOOP") || token.is_word("REPEAT")) && self.dialect != Dialect::SqlServer {
-      self.parse_loop()?.map(|block| Element::Loop(Box::new(block)))
+      self.parse_loop()?.map(|block| Element::Loop(self.bump.alloc(block)))
     } else if token.is_word("CASE") && self.dialect != Dialect::SqlServer {
       self
         .parse_case_statement()?
-        .map(|statement| Element::CaseStatement(Box::new(statement)))
+        .map(|statement| Element::CaseStatement(self.bump.alloc(statement)))
     } else {
       None
     };
@@ -603,7 +613,7 @@ impl<'a> Parser<'a> {
 
   fn parse_block(&mut self) -> Result<Option<Block<'a>>, SyntaxError> {
     self.enter()?;
-    let mut begin = vec![self.advance()];
+    let mut begin = bumpalo::vec![in self.bump; self.advance()];
     while let Some(token) = self.peek().filter(|token| {
       !token.starts_line()
         && (token.is_word("TRY") || token.is_word("CATCH") || token.is_word("ATOMIC") || token.is_word("NOT"))
@@ -627,7 +637,7 @@ impl<'a> Parser<'a> {
       return Ok(None);
     };
     self.pos += 1;
-    let mut end = vec![end];
+    let mut end = bumpalo::vec![in self.bump; end];
     if let Some(suffix) = self.peek().filter(|token| {
       token.newlines_before == 0
         && (token.is_word("TRY")
@@ -640,17 +650,17 @@ impl<'a> Parser<'a> {
     }
     self.leave();
     Ok(Some(Block {
-      begin,
+      begin: begin.into_bump_slice(),
       body,
       exception,
-      end,
+      end: end.into_bump_slice(),
     }))
   }
 
   fn parse_exception_section(&mut self) -> Result<ExceptionSection<'a>, SyntaxError> {
     let keyword = self.advance();
     let leading_comments = self.take_comments();
-    let mut handlers = Vec::new();
+    let mut handlers = BumpVec::new_in(self.bump);
     while self.peek().is_some_and(|token| token.is_word("WHEN")) {
       let Some(handler) = self.parse_handler(Stops {
         when: true,
@@ -665,7 +675,7 @@ impl<'a> Parser<'a> {
     Ok(ExceptionSection {
       keyword,
       leading_comments,
-      handlers,
+      handlers: handlers.into_bump_slice(),
     })
   }
 
@@ -681,7 +691,7 @@ impl<'a> Parser<'a> {
     let body = self.parse_list(body_stops)?;
     Ok(Some(Handler {
       when,
-      condition,
+      condition: condition.into_bump_slice(),
       then,
       body,
     }))
@@ -695,7 +705,7 @@ impl<'a> Parser<'a> {
       elsif: true,
       ..Default::default()
     };
-    let mut branches = Vec::new();
+    let mut branches = BumpVec::new_in(self.bump);
     loop {
       let keyword = self.advance();
       let Some(condition) = self.parse_elements_until(&["THEN"])? else {
@@ -706,7 +716,7 @@ impl<'a> Parser<'a> {
       let body = self.parse_list(body_stops)?;
       branches.push(IfBranch {
         keyword,
-        condition,
+        condition: condition.into_bump_slice(),
         then,
         body,
       });
@@ -730,7 +740,7 @@ impl<'a> Parser<'a> {
     let end = self.parse_end(&["IF"]);
     self.leave();
     Ok(end.map(|end| IfBlock {
-      branches,
+      branches: branches.into_bump_slice(),
       else_branch,
       end,
     }))
@@ -741,7 +751,7 @@ impl<'a> Parser<'a> {
     self.enter()?;
     let keyword = self.advance();
     let is_if = keyword.is_word("IF");
-    let mut condition = Vec::new();
+    let mut condition = BumpVec::new_in(self.bump);
     loop {
       let Some(token) = self.peek() else {
         self.leave();
@@ -770,7 +780,7 @@ impl<'a> Parser<'a> {
       condition.push(self.parse_element(&StatementState::default())?);
     }
     let body = self.parse_statement(Stops { else_: is_if, ..stops })?;
-    let mut else_comments = Vec::new();
+    let mut else_comments: &'a [Tok<'a>] = &[];
     let mut else_branch = None;
     if is_if {
       let comments_start = self.pos;
@@ -779,7 +789,7 @@ impl<'a> Parser<'a> {
         let else_keyword = self.advance();
         else_comments = comments;
         let statement = self.parse_statement(Stops { else_: true, ..stops })?;
-        else_branch = Some((else_keyword, Box::new(statement)));
+        else_branch = Some((else_keyword, &*self.bump.alloc(statement)));
       } else {
         self.pos = comments_start;
       }
@@ -787,8 +797,8 @@ impl<'a> Parser<'a> {
     self.leave();
     Ok(Some(Conditional {
       keyword,
-      condition,
-      body: Box::new(body),
+      condition: condition.into_bump_slice(),
+      body: self.bump.alloc(body),
       else_comments,
       else_branch,
     }))
@@ -799,7 +809,7 @@ impl<'a> Parser<'a> {
     let first = self.peek().unwrap();
     let is_repeat = first.is_word("REPEAT");
     let header = if first.is_word("LOOP") || is_repeat {
-      vec![Element::Token(self.advance())]
+      bumpalo::vec![in self.bump; Element::Token(self.advance())]
     } else {
       let Some(mut header) = self.parse_elements_until(&["LOOP", "DO"])? else {
         self.leave();
@@ -823,14 +833,14 @@ impl<'a> Parser<'a> {
         self.leave();
         return Ok(None);
       };
-      Some((keyword, condition))
+      Some((keyword, condition.into_bump_slice()))
     } else {
       None
     };
     let end = self.parse_end(&["LOOP", "WHILE", "FOR", "REPEAT", "FOREACH"]);
     self.leave();
     Ok(end.map(|end| Loop {
-      header,
+      header: header.into_bump_slice(),
       body,
       until,
       end,
@@ -844,7 +854,7 @@ impl<'a> Parser<'a> {
       self.leave();
       return Ok(None);
     };
-    let mut branches = Vec::new();
+    let mut branches = BumpVec::new_in(self.bump);
     while self.peek().is_some_and(|token| token.is_word("WHEN")) {
       let Some(branch) = self.parse_handler(Stops {
         when: true,
@@ -872,8 +882,8 @@ impl<'a> Parser<'a> {
     self.leave();
     Ok(end.filter(|_| !branches.is_empty()).map(|end| CaseStatement {
       case_keyword,
-      operand,
-      branches,
+      operand: operand.into_bump_slice(),
+      branches: branches.into_bump_slice(),
       else_branch,
       end,
     }))
@@ -881,14 +891,14 @@ impl<'a> Parser<'a> {
 
   /// `END` followed by one of `kinds` and optionally a label, or `None` when that isn't what's
   /// next.
-  fn parse_end(&mut self, kinds: &[&str]) -> Option<Vec<Tok<'a>>> {
+  fn parse_end(&mut self, kinds: &[&str]) -> Option<&'a [Tok<'a>]> {
     let end = self.peek().filter(|token| token.is_word("END"))?;
     let kind = self
       .tokens
       .get(self.pos + 1)
       .filter(|token| kinds.iter().any(|kind| token.is_word(kind)))?;
     self.pos += 2;
-    let mut tokens = vec![end, kind];
+    let mut tokens = bumpalo::vec![in self.bump; end, kind];
     if let Some(label) = self.peek().filter(|token| {
       token.newlines_before == 0
         && matches!(token.kind, TokenKind::Word | TokenKind::QuotedIdent)
@@ -897,7 +907,7 @@ impl<'a> Parser<'a> {
       tokens.push(label);
       self.pos += 1;
     }
-    Some(tokens)
+    Some(tokens.into_bump_slice())
   }
 
   /// A label before a block or loop: `<<name>>`, or `name:` in MySQL and BigQuery.
@@ -909,7 +919,7 @@ impl<'a> Parser<'a> {
       if matches!(name.kind, TokenKind::Word | TokenKind::QuotedIdent) && close.is_operator(">>") {
         self.pos += 3;
         return Some(Label {
-          tokens: vec![first, name, close],
+          tokens: self.bump.alloc_slice_copy(&[first, name, close]),
           own_line: true,
         });
       }
@@ -925,7 +935,7 @@ impl<'a> Parser<'a> {
         if is_label {
           self.pos += 2;
           return Some(Label {
-            tokens: vec![first, colon],
+            tokens: self.bump.alloc_slice_copy(&[first, colon]),
             own_line: false,
           });
         }
@@ -1112,12 +1122,12 @@ impl<'a> Parser<'a> {
     let token = self.peek().unwrap();
     match token.kind {
       TokenKind::OpenParen | TokenKind::OpenBracket | TokenKind::OpenBrace => {
-        Ok(Element::Group(Box::new(self.parse_group()?)))
+        Ok(Element::Group(self.bump.alloc(self.parse_group()?)))
       }
       TokenKind::Word if token.is_word("CASE") && !self.failed_constructs.contains(&self.pos) => {
         let start = self.pos;
         match self.parse_case()? {
-          Some(case) => Ok(Element::Case(Box::new(case))),
+          Some(case) => Ok(Element::Case(self.bump.alloc(case))),
           None => {
             self.failed_constructs.insert(start);
             self.pos = start + 1;
@@ -1133,7 +1143,7 @@ impl<'a> Parser<'a> {
       {
         let start = self.pos;
         match self.parse_block()? {
-          Some(block) => Ok(Element::Block(Box::new(block))),
+          Some(block) => Ok(Element::Block(self.bump.alloc(block))),
           None => {
             self.failed_constructs.insert(start);
             self.pos = start + 1;
@@ -1160,7 +1170,7 @@ impl<'a> Parser<'a> {
           self.pos = start + 1;
           return Ok(Element::Token(token));
         };
-        Ok(Element::DeclareSection(Box::new(DeclareSection {
+        Ok(Element::DeclareSection(self.bump.alloc(DeclareSection {
           keyword: Some(token),
           declarations,
         })))
@@ -1180,7 +1190,7 @@ impl<'a> Parser<'a> {
       TokenKind::OpenBracket => TokenKind::CloseBracket,
       _ => TokenKind::CloseBrace,
     };
-    let mut elements = Vec::new();
+    let mut elements = BumpVec::new_in(self.bump);
     loop {
       let Some(token) = self.peek() else {
         return Err(self.error(open, &format!("unclosed '{}'", open.text)));
@@ -1198,7 +1208,11 @@ impl<'a> Parser<'a> {
     }
     let close = self.advance();
     self.leave();
-    Ok(Group { open, elements, close })
+    Ok(Group {
+      open,
+      elements: elements.into_bump_slice(),
+      close,
+    })
   }
 
   fn parse_case(&mut self) -> Result<Option<Case<'a>>, SyntaxError> {
@@ -1208,7 +1222,7 @@ impl<'a> Parser<'a> {
       self.leave();
       return Ok(None);
     };
-    let mut branches = Vec::new();
+    let mut branches = BumpVec::new_in(self.bump);
     let mut pending_comments = take_trailing_own_line_comments(&mut operand);
     while self.peek().is_some_and(|token| token.is_word("WHEN")) {
       let when = self.advance();
@@ -1225,9 +1239,9 @@ impl<'a> Parser<'a> {
       branches.push(CaseBranch {
         leading_comments: std::mem::replace(&mut pending_comments, next_comments),
         when,
-        condition,
+        condition: condition.into_bump_slice(),
         then,
-        result,
+        result: result.into_bump_slice(),
       });
     }
     if branches.is_empty() {
@@ -1244,7 +1258,7 @@ impl<'a> Parser<'a> {
       Some(CaseElse {
         leading_comments: std::mem::replace(&mut pending_comments, next_comments),
         keyword,
-        result,
+        result: result.into_bump_slice(),
       })
     } else {
       None
@@ -1257,8 +1271,8 @@ impl<'a> Parser<'a> {
     self.leave();
     Ok(Some(Case {
       case_keyword,
-      operand,
-      branches,
+      operand: operand.into_bump_slice(),
+      branches: branches.into_bump_slice(),
       else_branch,
       end_comments: pending_comments,
       end,
@@ -1267,8 +1281,8 @@ impl<'a> Parser<'a> {
 
   /// The elements up to one of the words `stops`, which is left as the next token, or `None` when
   /// the statement or the enclosing brackets end first.
-  fn parse_elements_until(&mut self, stops: &[&str]) -> Result<Option<Vec<Element<'a>>>, SyntaxError> {
-    let mut elements = Vec::new();
+  fn parse_elements_until(&mut self, stops: &[&str]) -> Result<Option<BumpVec<'a, Element<'a>>>, SyntaxError> {
+    let mut elements = BumpVec::new_in(self.bump);
     loop {
       let Some(token) = self.peek() else {
         return Ok(None);
@@ -1324,13 +1338,13 @@ impl<'a> Parser<'a> {
     false
   }
 
-  fn take_comments(&mut self) -> Vec<Tok<'a>> {
-    let mut comments = Vec::new();
+  fn take_comments(&mut self) -> &'a [Tok<'a>] {
+    let mut comments = BumpVec::new_in(self.bump);
     while let Some(token) = self.peek().filter(|token| token.is_comment()) {
       comments.push(token);
       self.pos += 1;
     }
-    comments
+    comments.into_bump_slice()
   }
 
   fn peek(&self) -> Option<Tok<'a>> {
@@ -1494,7 +1508,7 @@ fn closing_text(kind: TokenKind) -> &'static str {
 
 /// Removes the comments at the end of `elements` that are on lines of their own, which introduce
 /// whatever comes next rather than ending what's before them.
-fn take_trailing_own_line_comments<'a>(elements: &mut Vec<Element<'a>>) -> Vec<Tok<'a>> {
+fn take_trailing_own_line_comments<'a>(elements: &mut BumpVec<'a, Element<'a>>) -> &'a [Tok<'a>] {
   let mut split = elements.len();
   while split > 0 {
     match elements[split - 1].as_token() {
@@ -1502,9 +1516,10 @@ fn take_trailing_own_line_comments<'a>(elements: &mut Vec<Element<'a>>) -> Vec<T
       _ => break,
     }
   }
-  elements
-    .split_off(split)
-    .into_iter()
-    .filter_map(|element| element.as_token())
-    .collect()
+  let comments = BumpVec::from_iter_in(
+    elements[split..].iter().filter_map(|element| element.as_token()),
+    elements.bump(),
+  );
+  elements.truncate(split);
+  comments.into_bump_slice()
 }

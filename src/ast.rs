@@ -9,6 +9,9 @@
 // Every token in the tree is borrowed from the lexer's output, and every token of the input is in
 // the tree exactly once, in its original order. Comments are tokens like any other, apart from the
 // ones on lines of their own between statements, which are items of the statement list.
+//
+// The tree is allocated in the arena the print items are, which never runs destructors, so
+// nothing in it may own memory of its own.
 
 use crate::lexer::Token;
 use crate::lexer::TokenKind;
@@ -18,7 +21,7 @@ pub type Tok<'a> = &'a Token<'a>;
 /// A list of statements: the file, or the body of a block.
 #[derive(Debug, Default)]
 pub struct StatementList<'a> {
-  pub items: Vec<Item<'a>>,
+  pub items: &'a [Item<'a>],
 }
 
 #[derive(Debug)]
@@ -35,7 +38,7 @@ pub enum ItemKind<'a> {
   Comment(Tok<'a>),
   /// A batch separator (`GO`) or a command to the client (`DELIMITER //`), along with any
   /// comments after it on its line.
-  Command(Tok<'a>, Vec<Tok<'a>>),
+  Command(Tok<'a>, &'a [Tok<'a>]),
 }
 
 impl<'a> Item<'a> {
@@ -57,11 +60,11 @@ impl<'a> Item<'a> {
 
 #[derive(Debug)]
 pub struct Statement<'a> {
-  pub elements: Vec<Element<'a>>,
+  pub elements: &'a [Element<'a>],
   /// The `;` (or `DELIMITER` set terminator) that ends the statement, if any.
   pub terminator: Option<Tok<'a>>,
   /// Comments on the same line as the end of the statement.
-  pub trailing_comments: Vec<Tok<'a>>,
+  pub trailing_comments: &'a [Tok<'a>],
   /// Whether a `dprint-ignore` comment precedes the statement, so it's written as it is.
   pub ignored: bool,
 }
@@ -89,23 +92,23 @@ impl<'a> Statement<'a> {
 pub enum Element<'a> {
   Token(Tok<'a>),
   /// Brackets of any kind (`( )`, `[ ]` or `{ }`) and what's within them.
-  Group(Box<Group<'a>>),
-  Case(Box<Case<'a>>),
+  Group(&'a Group<'a>),
+  Case(&'a Case<'a>),
   /// `BEGIN .. END`, including T-SQL's `BEGIN TRY .. END TRY` and `BEGIN CATCH .. END CATCH`.
-  Block(Box<Block<'a>>),
+  Block(&'a Block<'a>),
   /// The declarations before a block's `BEGIN` (ex. after `DECLARE`, or after the `IS` of an
   /// Oracle procedure).
-  DeclareSection(Box<DeclareSection<'a>>),
+  DeclareSection(&'a DeclareSection<'a>),
   /// `IF cond THEN .. END IF`.
-  If(Box<IfBlock<'a>>),
+  If(&'a IfBlock<'a>),
   /// T-SQL's `IF cond statement ELSE statement` and `WHILE cond statement`.
-  Conditional(Box<Conditional<'a>>),
+  Conditional(&'a Conditional<'a>),
   /// `LOOP`, `WHILE`, `FOR`, `FOREACH` and `REPEAT` loops with a body ended by `END ..`.
-  Loop(Box<Loop<'a>>),
+  Loop(&'a Loop<'a>),
   /// A procedural `CASE .. END CASE` whose branches hold statements.
-  CaseStatement(Box<CaseStatement<'a>>),
+  CaseStatement(&'a CaseStatement<'a>),
   /// A label for a block or loop (`<<name>>` or `name:`).
-  Label(Box<Label<'a>>),
+  Label(&'a Label<'a>),
 }
 
 impl<'a> Element<'a> {
@@ -179,7 +182,7 @@ impl<'a> Element<'a> {
 #[derive(Debug)]
 pub struct Group<'a> {
   pub open: Tok<'a>,
-  pub elements: Vec<Element<'a>>,
+  pub elements: &'a [Element<'a>],
   pub close: Tok<'a>,
 }
 
@@ -193,54 +196,54 @@ impl Group<'_> {
 #[derive(Debug)]
 pub struct Case<'a> {
   pub case_keyword: Tok<'a>,
-  pub operand: Vec<Element<'a>>,
-  pub branches: Vec<CaseBranch<'a>>,
+  pub operand: &'a [Element<'a>],
+  pub branches: &'a [CaseBranch<'a>],
   pub else_branch: Option<CaseElse<'a>>,
   /// Comments on lines of their own before the `END`.
-  pub end_comments: Vec<Tok<'a>>,
+  pub end_comments: &'a [Tok<'a>],
   pub end: Tok<'a>,
 }
 
 #[derive(Debug)]
 pub struct CaseBranch<'a> {
   /// Comments on lines of their own before the `WHEN`.
-  pub leading_comments: Vec<Tok<'a>>,
+  pub leading_comments: &'a [Tok<'a>],
   pub when: Tok<'a>,
-  pub condition: Vec<Element<'a>>,
+  pub condition: &'a [Element<'a>],
   pub then: Tok<'a>,
-  pub result: Vec<Element<'a>>,
+  pub result: &'a [Element<'a>],
 }
 
 #[derive(Debug)]
 pub struct CaseElse<'a> {
-  pub leading_comments: Vec<Tok<'a>>,
+  pub leading_comments: &'a [Tok<'a>],
   pub keyword: Tok<'a>,
-  pub result: Vec<Element<'a>>,
+  pub result: &'a [Element<'a>],
 }
 
 #[derive(Debug)]
 pub struct Block<'a> {
   /// `BEGIN` along with any words after it that say what kind of block it is (ex. `TRY`).
-  pub begin: Vec<Tok<'a>>,
+  pub begin: &'a [Tok<'a>],
   pub body: StatementList<'a>,
   pub exception: Option<ExceptionSection<'a>>,
   /// `END` along with any words after it (ex. `TRY` or the name of the procedure).
-  pub end: Vec<Tok<'a>>,
+  pub end: &'a [Tok<'a>],
 }
 
 #[derive(Debug)]
 pub struct ExceptionSection<'a> {
   pub keyword: Tok<'a>,
   /// Comments before the first handler.
-  pub leading_comments: Vec<Tok<'a>>,
-  pub handlers: Vec<Handler<'a>>,
+  pub leading_comments: &'a [Tok<'a>],
+  pub handlers: &'a [Handler<'a>],
 }
 
 /// `WHEN condition THEN statements` in a list of exception handlers or a procedural `CASE`.
 #[derive(Debug)]
 pub struct Handler<'a> {
   pub when: Tok<'a>,
-  pub condition: Vec<Element<'a>>,
+  pub condition: &'a [Element<'a>],
   pub then: Tok<'a>,
   pub body: StatementList<'a>,
 }
@@ -272,17 +275,17 @@ impl<'a> DeclareSection<'a> {
 
 #[derive(Debug)]
 pub struct IfBlock<'a> {
-  pub branches: Vec<IfBranch<'a>>,
+  pub branches: &'a [IfBranch<'a>],
   pub else_branch: Option<ElseBranch<'a>>,
   /// `END IF`.
-  pub end: Vec<Tok<'a>>,
+  pub end: &'a [Tok<'a>],
 }
 
 #[derive(Debug)]
 pub struct IfBranch<'a> {
   /// `IF`, `ELSIF` or `ELSEIF`.
   pub keyword: Tok<'a>,
-  pub condition: Vec<Element<'a>>,
+  pub condition: &'a [Element<'a>],
   pub then: Tok<'a>,
   pub body: StatementList<'a>,
 }
@@ -298,11 +301,11 @@ pub struct ElseBranch<'a> {
 #[derive(Debug)]
 pub struct Conditional<'a> {
   pub keyword: Tok<'a>,
-  pub condition: Vec<Element<'a>>,
-  pub body: Box<Statement<'a>>,
+  pub condition: &'a [Element<'a>],
+  pub body: &'a Statement<'a>,
   /// Comments on lines of their own between the body and the `ELSE`.
-  pub else_comments: Vec<Tok<'a>>,
-  pub else_branch: Option<(Tok<'a>, Box<Statement<'a>>)>,
+  pub else_comments: &'a [Tok<'a>],
+  pub else_branch: Option<(Tok<'a>, &'a Statement<'a>)>,
 }
 
 impl<'a> Conditional<'a> {
@@ -318,28 +321,45 @@ impl<'a> Conditional<'a> {
 pub struct Loop<'a> {
   /// What comes before the body: `WHILE condition` or `FOR .. IN ..`, followed by the `LOOP` or
   /// `DO`. Just `LOOP` or `REPEAT` for loops without a header.
-  pub header: Vec<Element<'a>>,
+  pub header: &'a [Element<'a>],
   pub body: StatementList<'a>,
   /// The `UNTIL` of a `REPEAT` loop and its condition.
-  pub until: Option<(Tok<'a>, Vec<Element<'a>>)>,
+  pub until: Option<(Tok<'a>, &'a [Element<'a>])>,
   /// `END LOOP`, `END WHILE`, `END FOR` or `END REPEAT`, followed by any label.
-  pub end: Vec<Tok<'a>>,
+  pub end: &'a [Tok<'a>],
 }
 
 #[derive(Debug)]
 pub struct CaseStatement<'a> {
   pub case_keyword: Tok<'a>,
-  pub operand: Vec<Element<'a>>,
-  pub branches: Vec<Handler<'a>>,
+  pub operand: &'a [Element<'a>],
+  pub branches: &'a [Handler<'a>],
   pub else_branch: Option<ElseBranch<'a>>,
   /// `END CASE`.
-  pub end: Vec<Tok<'a>>,
+  pub end: &'a [Tok<'a>],
 }
 
 #[derive(Debug)]
 pub struct Label<'a> {
-  pub tokens: Vec<Tok<'a>>,
+  pub tokens: &'a [Tok<'a>],
   /// Whether the label is written on a line of its own (ex. `<<name>>`) rather than before what
   /// it labels (ex. `name: LOOP`).
   pub own_line: bool,
 }
+
+// the arena doesn't run destructors, so a node that needs dropping would leak
+const _: () = {
+  assert!(!std::mem::needs_drop::<StatementList<'static>>());
+  assert!(!std::mem::needs_drop::<Item<'static>>());
+  assert!(!std::mem::needs_drop::<Statement<'static>>());
+  assert!(!std::mem::needs_drop::<Element<'static>>());
+  assert!(!std::mem::needs_drop::<Group<'static>>());
+  assert!(!std::mem::needs_drop::<Case<'static>>());
+  assert!(!std::mem::needs_drop::<Block<'static>>());
+  assert!(!std::mem::needs_drop::<DeclareSection<'static>>());
+  assert!(!std::mem::needs_drop::<IfBlock<'static>>());
+  assert!(!std::mem::needs_drop::<Conditional<'static>>());
+  assert!(!std::mem::needs_drop::<Loop<'static>>());
+  assert!(!std::mem::needs_drop::<CaseStatement<'static>>());
+  assert!(!std::mem::needs_drop::<Label<'static>>());
+};
