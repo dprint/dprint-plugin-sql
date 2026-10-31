@@ -1,8 +1,11 @@
 use std::collections::HashSet;
 
+use dprint_core::formatting::Arena;
+
 use crate::configuration::Configuration;
 
 pub struct Context<'a> {
+  pub arena: &'a Arena,
   pub config: &'a Configuration,
   /// The text being formatted, which an ignored statement is written from.
   pub text: &'a str,
@@ -17,8 +20,9 @@ pub struct Context<'a> {
 }
 
 impl<'a> Context<'a> {
-  pub fn new(config: &'a Configuration, text: &'a str) -> Self {
+  pub fn new(arena: &'a Arena, config: &'a Configuration, text: &'a str) -> Self {
     Self {
+      arena,
       config,
       text,
       code_bodies: HashSet::new(),

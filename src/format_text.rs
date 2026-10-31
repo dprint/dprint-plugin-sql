@@ -2,6 +2,8 @@ use std::path::Path;
 
 use dprint_core::configuration::NewLineKind;
 use dprint_core::configuration::resolve_new_line_kind;
+use dprint_core::formatting::Arena;
+use dprint_core::formatting::ArenaPool;
 use dprint_core::formatting::PrintOptions;
 
 use crate::ast::Item;
@@ -19,8 +21,19 @@ use crate::lexer::Token;
 use crate::lexer::TokenKind;
 use crate::parser;
 
-pub fn format_text(_file_path: &Path, text: &str, config: &Configuration) -> Result<Option<String>, FormatError> {
-  let result = format_text_inner(text, config)?;
+pub fn format_text(file_path: &Path, text: &str, config: &Configuration) -> Result<Option<String>, FormatError> {
+  format_text_with_arena_pool(file_path, text, config, None)
+}
+
+/// Formats the text, creating the arena from the pool when one is provided so its memory is
+/// reused between formats.
+pub(crate) fn format_text_with_arena_pool(
+  _file_path: &Path,
+  text: &str,
+  config: &Configuration,
+  arena_pool: Option<&ArenaPool>,
+) -> Result<Option<String>, FormatError> {
+  let result = format_text_inner(text, config, arena_pool)?;
   match result {
     Some(result) if result != text => Ok(Some(result)),
     _ => Ok(None),
@@ -28,14 +41,18 @@ pub fn format_text(_file_path: &Path, text: &str, config: &Configuration) -> Res
 }
 
 /// The formatted text, or `None` when a `dprint-ignore-file` comment says to leave it alone.
-fn format_text_inner(text: &str, config: &Configuration) -> Result<Option<String>, FormatError> {
+fn format_text_inner(
+  text: &str,
+  config: &Configuration,
+  arena_pool: Option<&ArenaPool>,
+) -> Result<Option<String>, FormatError> {
   let text = strip_bom(text);
   let tokens = lex(text, config.dialect)?;
   if has_ignore_file_comment(&tokens) {
     return Ok(None);
   }
   let list = parse(&tokens, text, config.dialect)?;
-  let result = print(&list, text, config);
+  let result = print(&list, text, config, arena_pool);
   verify(&tokens, &result, config)?;
   Ok(Some(result))
 }
@@ -51,31 +68,35 @@ pub(crate) fn format_embedded(text: &str, config: &Configuration) -> Option<Stri
     return None;
   }
   let list = parser::parse(&tokens, config.dialect).ok()?;
-  let result = print(&list, text, &config);
+  let result = print(&list, text, &config, None);
   verify(&tokens, &result, &config).ok()?;
   Some(result)
 }
 
-pub(crate) fn print(list: &StatementList, text: &str, config: &Configuration) -> String {
-  dprint_core::formatting::format(
-    || {
-      let mut context = Context::new(config, text);
-      generate(list, &mut context)
-    },
-    config_to_print_options(text, config),
-  )
+pub(crate) fn print(
+  list: &StatementList,
+  text: &str,
+  config: &Configuration,
+  arena_pool: Option<&ArenaPool>,
+) -> String {
+  let arena = create_arena(arena_pool);
+  let mut context = Context::new(&arena, config, text);
+  let print_items = generate(list, &mut context);
+  dprint_core::formatting::print(print_items, config_to_print_options(text, config))
 }
 
 /// Prints the items of the top level statement list, as they're printed when formatting the whole
 /// file, but without a newline at the end.
-pub(crate) fn print_items(items: &[Item], text: &str, config: &Configuration) -> String {
-  dprint_core::formatting::format(
-    || {
-      let mut context = Context::new(config, text);
-      generate_items(items, &mut context)
-    },
-    config_to_print_options(text, config),
-  )
+pub(crate) fn print_items(
+  items: &[Item],
+  text: &str,
+  config: &Configuration,
+  arena_pool: Option<&ArenaPool>,
+) -> String {
+  let arena = create_arena(arena_pool);
+  let mut context = Context::new(&arena, config, text);
+  let print_items = generate_items(items, &mut context);
+  dprint_core::formatting::print(print_items, config_to_print_options(text, config))
 }
 
 #[cfg(feature = "tracing")]
@@ -83,13 +104,10 @@ pub fn trace_file(_file_path: &Path, text: &str, config: &Configuration) -> dpri
   let text = strip_bom(text);
   let tokens = lexer::lex(text, config.dialect).unwrap();
   let list = parser::parse(&tokens, config.dialect).unwrap();
-  dprint_core::formatting::trace_printing(
-    || {
-      let mut context = Context::new(config, text);
-      generate(&list, &mut context)
-    },
-    config_to_print_options(text, config),
-  )
+  let arena = Arena::new();
+  let mut context = Context::new(&arena, config, text);
+  let print_items = generate(&list, &mut context);
+  dprint_core::formatting::trace_printing(print_items, config_to_print_options(text, config))
 }
 
 pub(crate) fn strip_bom(text: &str) -> &str {
@@ -147,6 +165,13 @@ fn highlight_range(text: &str, span: std::ops::Range<usize>) -> (usize, usize) {
         start,
       ),
     }
+  }
+}
+
+fn create_arena(arena_pool: Option<&ArenaPool>) -> Arena {
+  match arena_pool {
+    Some(arena_pool) => arena_pool.create_arena(),
+    None => Arena::new(),
   }
 }
 
