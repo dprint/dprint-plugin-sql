@@ -2,6 +2,23 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://plugins.dprint.dev/dprint/dprint-plugin-sql/0.0.0/schema.json",
   "type": "object",
+  "x-playground": {
+    "input": [
+      "create table orders (id integer primary key, customer_id integer not null references customers(id),",
+      "  status varchar(20) default 'pending', total decimal(10,2), created_at timestamp);",
+      "",
+      "insert into orders (customer_id,status,total) values (1,'paid',25.50),(2,'pending',99.99);",
+      "",
+      "with recent as (select customer_id, sum(total) as spent from orders where created_at > current_date - interval '30 days' group by customer_id)",
+      "select c.name,c.email,r.spent,",
+      "case when r.spent > 1000 then 'gold' when r.spent > 100 then 'silver' else 'bronze' end as tier",
+      "from customers c inner join recent r on r.customer_id = c.id left join addresses a on a.customer_id = c.id",
+      "where c.active = true and (a.country = 'CA' or a.country is null)",
+      "order by r.spent desc limit 10;",
+      "",
+      "update orders set status='shipped' where id in (select order_id from shipments where shipped_at is not null);"
+    ]
+  },
   "definitions": {
     "useTabs": {
       "description": "Whether to use tabs (true) or spaces (false).",
@@ -9,10 +26,10 @@
       "default": false,
       "oneOf": [{
         "const": true,
-        "description": ""
+        "description": "Uses tabs for indentation."
       }, {
         "const": false,
-        "description": ""
+        "description": "Uses spaces for indentation."
       }]
     },
     "newLineKind": {
@@ -35,15 +52,26 @@
     "lineWidth": {
       "description": "The width of a line the printer will try to stay under. Note that the printer may exceed this width in certain cases.",
       "default": 120,
-      "type": "number"
+      "type": "integer",
+      "minimum": 1
     },
     "indentWidth": {
       "description": "The number of characters for an indent.",
       "default": 2,
-      "type": "number"
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 255
     },
     "useTabs": {
-      "$ref": "#/definitions/useTabs"
+      "$ref": "#/definitions/useTabs",
+      "x-example": {
+        "config": {
+          "lineWidth": 40
+        },
+        "input": [
+          "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT);"
+        ]
+      }
     },
     "newLineKind": {
       "$ref": "#/definitions/newLineKind"
@@ -91,10 +119,17 @@
       }, {
         "const": "lower",
         "description": "Converts keywords to lowercase."
-      }]
+      }],
+      "x-example": {
+        "input": [
+          "Select name, count(*) AS total",
+          "from users Inner Join orders on orders.user_id = users.id",
+          "Where active = TRUE group by name;"
+        ]
+      }
     },
     "uppercase": {
-      "description": "Deprecated. Use 'casing' instead. Use ALL CAPS for keywords.",
+      "description": "Deprecated. Use `casing` instead. Use ALL CAPS for keywords.",
       "default": false,
       "type": "boolean"
     },
@@ -105,9 +140,14 @@
       "minimum": 1
     },
     "joinsAsTopLevel": {
-      "description": "Whether to write joins at the indentation of the FROM keyword rather than indented beneath it.",
+      "description": "Whether to write joins at the indentation of the `FROM` keyword rather than indented beneath it.",
       "default": false,
-      "type": "boolean"
+      "type": "boolean",
+      "x-example": {
+        "input": [
+          "SELECT u.name, o.total FROM users u INNER JOIN orders o ON o.user_id = u.id LEFT JOIN payments p ON p.order_id = o.id;"
+        ]
+      }
     }
   }
 }
